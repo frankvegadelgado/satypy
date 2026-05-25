@@ -7,7 +7,7 @@ VERSION = "0.0.1"
 NAME = "satypy"
 
 INSTALL_REQUIRES = [
-    "networkx[default]>=3.4.2"
+    "networkx[default]>=3.4.2",
 ]
 
 setuptools.setup(

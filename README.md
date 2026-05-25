@@ -2,7 +2,7 @@
 
 ![SatyPy: SAT Solver](docs/satypy.png)
 
-This work builds upon [SAT in Polynomial Time: The SatyPy Algorithm](https://github.com/frankvegadelgado/satypy).
+This work builds upon [SatyPy: SAT Solver](https://github.com/frankvegadelgado/satypy).
 
 # Boolean Satisfiability (SAT) Problem
 
@@ -123,6 +123,12 @@ v 2 4 -3 -1 0
 
 ```
 s UNSATISFIABLE
+```
+
+## If the solver cannot decide, the console output will display:
+
+```
+s UNKNOWN
 ```
 
 ## SAT Benchmarks and Testing

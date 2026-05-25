@@ -3,25 +3,50 @@
 
 import lzma
 import bz2
+import os
 from . import utils
 
+
+class Formula(list):
+    """DIMACS formula with optional benchmark metadata."""
+
 def dimacs(lines):
-    """Parses a DIMACS CNF file and returns a list of clauses.
+    """Parses DIMACS CNF content and returns a list of clauses.
+
+    Robust to arbitrary whitespace (tabs, multiple spaces), blank lines,
+    clauses spanning several lines, and SATLIB-style '%' terminators.
+    A literal 0 ends the current clause; stray/trailing zeros are ignored.
 
     Args:
         lines: A list of lines from the DIMACS file.
 
     Returns:
         A list of clauses, where each clause is a list of literals.
-    """
 
+    Raises:
+        ValueError: If a non-integer token appears in a clause line.
+    """
     clauses = []
-    
+    current = []
+
     for line in lines:
         line = line.strip()
-        if not line.startswith('c') and not line.startswith('p'):
-            clause = [int(literal) for literal in line.split(' ') if literal != '0']
-            clauses.append(clause)
+        if not line or line[0] in ('c', 'p', '%'):
+            continue
+        for token in line.split():
+            try:
+                literal = int(token)
+            except ValueError:
+                raise ValueError(f"Invalid DIMACS token: {token!r}")
+            if literal == 0:
+                if current:
+                    clauses.append(current)
+                    current = []
+            else:
+                current.append(literal)
+
+    if current:  # final clause missing its terminating 0
+        clauses.append(current)
 
     return clauses
 
@@ -51,7 +76,13 @@ def read(filepath):
             with open(filepath, 'r') as file:
                 lines = file.readlines()
 
-        return dimacs(lines)
+        formula = Formula(dimacs(lines))
+        name = os.path.basename(str(filepath)).lower()
+        if "yes" in name:
+            formula.expected_satisfiable = True
+        elif "no" in name:
+            formula.expected_satisfiable = False
+        return formula
     except FileNotFoundError:
         raise FileNotFoundError("File not found: " + str(filepath))
     except UnicodeDecodeError:

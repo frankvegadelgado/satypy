@@ -7,7 +7,7 @@ from . import utils
 from . import app
 
 def sat_solver(inputDirectory, verbose=False, timed=False, log=False):
-    """Solves a CNF formula.
+    """Solves every CNF formula in a directory.
 
     Args:
         inputDirectory: Input directory path.
@@ -33,12 +33,12 @@ def main():
     helper.add_argument('-t', '--timer', action='store_true', help='Enable timer output')
     helper.add_argument('-l', '--log', action='store_true', help='Enable file logging')
     helper.add_argument('--version', action='version', version='%(prog)s 0.0.1')
-    
+
     # Initialize the parameters
     args = helper.parse_args()
-    sat_solver(args.inputDirectory, 
-               verbose=args.verbose, 
-               timed=args.timer, 
+    sat_solver(args.inputDirectory,
+               verbose=args.verbose,
+               timed=args.timer,
                log=args.log)
 
 if __name__ == "__main__":

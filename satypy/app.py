@@ -50,8 +50,16 @@ def sat_solver(inputFile, verbose=False, timed=False, log=False):
         utils.println("Solving the problem done", logger)
   
     # Output the solution
-    answer = "s UNKNOWN" if (satisfiability is None) else (utils.format_solution(list(answer) + [0]) if (satisfiability) else "s UNSATISFIABLE")
-    utils.output(answer, logger, verbose or log)   
+    output = "s UNKNOWN" if (satisfiability is None) else (utils.format_solution(list(answer) + [0]) if (satisfiability) else "s UNSATISFIABLE")
+    utils.output(output, logger, verbose or log)
+
+    # Compare against benchmark expectation encoded in the file name (yes/no).
+    expected = getattr(formula, "expected_satisfiable", None)
+    if expected is not None and satisfiability is not None and satisfiability != expected:
+        utils.output(
+            f"c WARNING: result disagrees with benchmark expectation "
+            f"({'SATISFIABLE' if expected else 'UNSATISFIABLE'})",
+            logger, verbose or log)
         
 def main():
     
@@ -63,12 +71,12 @@ def main():
     helper.add_argument('-t', '--timer', action='store_true', help='Enable timer output')
     helper.add_argument('-l', '--log', action='store_true', help='Enable file logging')
     helper.add_argument('--version', action='version', version='%(prog)s 0.0.1')
-    
+
     # Initialize the parameters
     args = helper.parse_args()
-    sat_solver(args.inputFile, 
-               verbose=args.verbose, 
-               timed=args.timer, 
+    sat_solver(args.inputFile,
+               verbose=args.verbose,
+               timed=args.timer,
                log=args.log)
 
 if __name__ == "__main__":
