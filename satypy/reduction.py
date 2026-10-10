@@ -581,13 +581,14 @@ def _vote(table, key, value, weight=1):
     entry[value] = entry.get(value, 0) + weight
 
 
-def decode_vertex_cover_to_assignment(info, cover, variables):
+def decode_vertex_cover_to_assignment(info, cover, variables, return_undecided=False):
     """Invert the chain: cover -> Khot-Regev families -> strong-left labels -> G -> B -> H ->
     parity bits. A copy ((u, S), i) outside the cover puts S in the family F_u; u gets the label s
     maximizing the p-biased mass of {S in F_u : s in S}; every later stage takes pluralities.
     The matrix-game labels vote for the bits of their supports: each local assignment whose
     restored table value equals the label gets an equal share of one vote.
-    Returns a set of literals over `variables` (undecided variables are set to False)."""
+    Returns a set of literals over `variables` (undecided variables are set to False), and with
+    return_undecided=True also the list of variables that received no decisive vote."""
     Phi, p = info["strong_left_game"], info["p"]
     R = Phi.alphabet_size
     scores = {}
@@ -647,7 +648,10 @@ def decode_vertex_cover_to_assignment(info, cover, variables):
         for local in matches:
             for var, bit in local.items():
                 _vote(bit_votes, var, bit, Fraction(1, len(matches)))
-    return {v if _plurality(bit_votes.get(v, {})) == 1 else -v for v in variables}
+    literals = {v if _plurality(bit_votes.get(v, {})) == 1 else -v for v in variables}
+    if return_undecided:
+        return literals, [v for v in variables if _plurality(bit_votes.get(v, {})) is None]
+    return literals
 
 
 def approximate_vertex_cover(graph):

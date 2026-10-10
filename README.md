@@ -121,11 +121,15 @@ SatyPy prints its answer in the DIMACS output format.
 
 - **Unsatisfiable:** `s UNSATISFIABLE`, only when an exact stage proves it.
 
-- **Undecided:** `s UNKNOWN`, preceded by DIMACS comment lines (`c ...`) that report what Salvador found:
+- **Comment lines:** before the answer, SatyPy prints DIMACS comment lines (`c ...`) that report what Salvador found
+  on each Vertex Cover graph and, when the formula is decided, a line `c decided by: ...` naming the stage that decided
+  it (empty clause, simplification, 2-SAT, OpenAI/Khot-Regev chain, gap rule, or Karp graph).
+
+- **Undecided:** `s UNKNOWN`, preceded by the comment lines, for example:
 
   ```
-  c Karp graph: 30 vertices; Salvador cover: 20 vertices, 1 above the bound n + 2m = 19 (satisfiability not determined)
   c OpenAI/Khot-Regev chain: 12672 vertices; Salvador cover: 8448 vertices (fraction 2/3; satisfiable formulas admit 2/3); gap rule inactive: parameters t=1, h=1, rank-one gadget are below the reference's (t >= 7,097,828, h >= 2, latent gadget)
+  c Karp graph: 30 vertices; Salvador cover: 20 vertices, 1 above the bound n + 2m = 19 (satisfiability not determined)
   s UNKNOWN
   ```
 
@@ -135,17 +139,19 @@ The directory `benchmarks/test_formulas` contains four small formulas.
 
 ```
 saty -i benchmarks/test_formulas/formula2.cnf
+c OpenAI/Khot-Regev chain: 11232 vertices; Salvador cover: 7488 vertices (fraction 2/3; satisfiable formulas admit 2/3); gap rule inactive: parameters t=1, h=1, rank-one gadget are below the reference's (t >= 7,097,828, h >= 2, latent gadget)
+c decided by: Karp graph (Salvador's cover is optimal, 17 vertices)
 s SATISFIABLE
 v 1 2 -3 0
 ```
 
-`formula2.cnf` (3 variables, 7 clauses) survives simplification; Salvador finds an optimal cover of its Karp graph,
-which is a satisfying assignment.
+`formula2.cnf` (3 variables, 7 clauses) survives simplification. The OpenAI/Khot–Regev chain runs first and does not
+decide it; Salvador finds an optimal cover of its Karp graph, which is a satisfying assignment.
 
 ```
 saty -i benchmarks/test_formulas/formula3.cnf
-c Karp graph: 30 vertices; Salvador cover: 20 vertices, 1 above the bound n + 2m = 19 (satisfiability not determined)
 c OpenAI/Khot-Regev chain: 12672 vertices; Salvador cover: 8448 vertices (fraction 2/3; satisfiable formulas admit 2/3); gap rule inactive: parameters t=1, h=1, rank-one gadget are below the reference's (t >= 7,097,828, h >= 2, latent gadget)
+c Karp graph: 30 vertices; Salvador cover: 20 vertices, 1 above the bound n + 2m = 19 (satisfiability not determined)
 s UNKNOWN
 ```
 
@@ -162,8 +168,8 @@ formula0.cnf: (SatyPy) SATISFIABLE
 Test: formula3.cnf
 formula3.cnf: (MiniSat) UNSATISFIABLE
 formula3.cnf: (Brute Force) UNSATISFIABLE
-formula3.cnf: c Karp graph: 30 vertices; Salvador cover: 20 vertices, 1 above the bound n + 2m = 19 (satisfiability not determined)
 formula3.cnf: c OpenAI/Khot-Regev chain: ...
+formula3.cnf: c Karp graph: 30 vertices; Salvador cover: 20 vertices, 1 above the bound n + 2m = 19 (satisfiability not determined)
 formula3.cnf: (SatyPy) UNKNOWN
 ```
 
@@ -311,13 +317,8 @@ Variable IDs may be any positive integers (not necessarily `1..n`, contiguous, o
    formula unsatisfiable.
 3. **2-SAT**: if every remaining clause has at most two literals, the formula is decided exactly by the
    strongly-connected-components algorithm (`algorithm._solve_two_sat`).
-4. **Exact reduction to Vertex Cover**: otherwise `reduction.reduce_sat_to_3sat` converts the residual formula to exactly
-   three literals per clause and `reduction.reduce_3sat_to_exact_vertex_cover` builds Karp's graph in the form of Garey
-   and Johnson (an edge per variable, a triangle per clause, an edge from each corner to its literal; `2n + 3m` vertices).
-   The formula is satisfiable if and only if this graph has a vertex cover of `n + 2m` vertices, and every cover has at
-   least that many. [Salvador](https://pypi.org/project/salvador/) 0.1.0 computes a cover; if it has exactly `n + 2m`
-   vertices it is optimal and `reduction.decode_exact_vertex_cover` reads a satisfying assignment from it.
-5. **OpenAI/Khot–Regev chain** (at most `-m` 3-SAT clauses): `reduction.reduce_3sat_to_unweighted_vertex_cover`
+4. **OpenAI/Khot–Regev chain** (at most `-m` 3-SAT clauses): otherwise `reduction.reduce_sat_to_3sat` converts the
+   residual formula to exactly three literals per clause, and `reduction.reduce_3sat_to_unweighted_vertex_cover`
    implements the gap reduction of the reference,
 
    ```
@@ -341,11 +342,20 @@ Variable IDs may be any positive integers (not necessarily `1..n`, contiguous, o
    one 18-vertex graph whose minimum cover is 12, for every formula, so this stage cannot tell satisfiable and
    unsatisfiable formulas apart (see Experiments below).
 
+5. **Exact reduction to Vertex Cover** (at most `-e` 3-SAT clauses): `reduction.reduce_3sat_to_exact_vertex_cover` builds Karp's graph in the form of Garey
+   and Johnson (an edge per variable, a triangle per clause, an edge from each corner to its literal; `2n + 3m` vertices).
+   The formula is satisfiable if and only if this graph has a vertex cover of `n + 2m` vertices, and every cover has at
+   least that many. [Salvador](https://pypi.org/project/salvador/) 0.1.0 computes a cover; if it has exactly `n + 2m`
+   vertices it is optimal and `reduction.decode_exact_vertex_cover` reads a satisfying assignment from it.
+Both Vertex Cover stages run on every formula that reaches them. **The chain has priority**: when it decides the
+formula its answer is printed (followed by `c also decided by: Karp graph ...` if Karp decided it too); otherwise
+Karp's answer is printed. A `c decided by: ...` line always names the stage that decided the formula.
+
 When a Vertex Cover stage runs without deciding, SatyPy prints DIMACS comment lines before `s UNKNOWN`, for example:
 
 ```
-c Karp graph: 30 vertices; Salvador cover: 20 vertices, 1 above the bound n + 2m = 19 (satisfiability not determined)
 c OpenAI/Khot-Regev chain: 12672 vertices; Salvador cover: 8448 vertices (fraction 2/3; satisfiable formulas admit 2/3); gap rule inactive: parameters t=1, h=1, rank-one gadget are below the reference's (t >= 7,097,828, h >= 2, latent gadget)
+c Karp graph: 30 vertices; Salvador cover: 20 vertices, 1 above the bound n + 2m = 19 (satisfiability not determined)
 s UNKNOWN
 ```
 
@@ -363,7 +373,7 @@ might be hard to approximate to within 2 − ε*, J. Comput. System Sci. 74 (200
 
 ## Experiments
 
-All numbers below were measured with SatyPy 0.0.1 and Salvador 0.1.0 (defaults) on a machine with 2 CPU cores and
+All numbers below were measured with SatyPy 0.0.2, which ran the Karp stage before the chain, and Salvador 0.1.0 (defaults) on a machine with 2 CPU cores and
 8 GB of memory. Python randomises the iteration order of hashed objects from one run to the next, which can change
 Salvador's tie-breaking, so counts may vary slightly between runs; the soundness of the answers cannot.
 
@@ -408,6 +418,68 @@ gives a cover of about 0.688 of the vertices, and the decoder inverts it), and S
 But unsatisfiable formulas reach the same 2/3, and Salvador's optimal cover decodes to a satisfying assignment no more
 often than chance: at these parameters the chain carries no information about satisfiability, and every decision above
 was made by simplification or by the Karp stage.
+
+## Formulas Decided by the OpenAI Chain
+
+With the chain first (SatyPy 0.0.3), some satisfiable formulas are decided by it. Three examples, with the real output:
+
+1. The formula that SatyPy 0.0.1 reported as solved through the chain (the fourth formula of
+   `test_saty -d 6 -m 12 -n 8 -g -r 7`, with non-contiguous identifiers):
+
+   ```
+   p cnf 59 12
+   -31 -58 23 0
+   59 -23 -42 0
+   -23 58 31 0
+   -59 52 -23 0
+   -23 42 59 0
+   58 -31 -59 0
+   59 -31 -42 0
+   -42 58 -23 0
+   -23 -52 58 0
+   -59 -52 -31 0
+   59 -58 -52 0
+   -42 52 -23 0
+   ```
+
+   ```
+   c OpenAI/Khot-Regev chain: 20808 vertices; Salvador cover: 13872 vertices (fraction 2/3; satisfiable formulas admit 2/3); gap rule inactive: parameters t=1, h=1, rank-one gadget are below the reference's (t >= 7,097,828, h >= 2, latent gadget)
+   c decided by: OpenAI/Khot-Regev chain (decoded assignment; 6 of 6 variables decided by the cover, the rest set to False; verifier accepted the complement of the assignment); note: all False also satisfies the formula
+   c also decided by: Karp graph (Salvador's cover is optimal)
+   s SATISFIABLE
+   v -23 -31 -42 -52 -58 -59 0
+   ```
+
+2. A formula satisfied by the all-True assignment (`p cnf 3 4`: `-1 3 -2 0`, `2 3 1 0`, `-3 2 1 0`, `2 1 3 0`):
+
+   ```
+   c OpenAI/Khot-Regev chain: 6912 vertices; Salvador cover: 4608 vertices (fraction 2/3; satisfiable formulas admit 2/3); gap rule inactive: parameters t=1, h=1, rank-one gadget are below the reference's (t >= 7,097,828, h >= 2, latent gadget)
+   c decided by: OpenAI/Khot-Regev chain (decoded assignment; 3 of 3 variables decided by the cover, the rest set to False; verifier accepted the assignment); note: all True also satisfies the formula
+   c also decided by: Karp graph (Salvador's cover is optimal)
+   s SATISFIABLE
+   v 1 2 3 0
+   ```
+
+3. A formula satisfied by the all-False assignment (`p cnf 3 6`: `2 3 -1 0`, `-3 1 2 0`, `-2 -3 -1 0`, `3 -1 2 0`,
+   `1 -2 3 0`, `2 3 -1 0`):
+
+   ```
+   c OpenAI/Khot-Regev chain: 9792 vertices; Salvador cover: 6528 vertices (fraction 2/3; satisfiable formulas admit 2/3); gap rule inactive: parameters t=1, h=1, rank-one gadget are below the reference's (t >= 7,097,828, h >= 2, latent gadget)
+   c decided by: OpenAI/Khot-Regev chain (decoded assignment; 3 of 3 variables decided by the cover, the rest set to False; verifier accepted the complement of the assignment); note: all False also satisfies the formula
+   c also decided by: Karp graph (Salvador's cover is optimal)
+   s SATISFIABLE
+   v -1 -2 -3 0
+   ```
+
+**What these examples show.** In a search over random satisfiable formulas with 3 to 6 variables and 4 to 10 clauses
+that survive simplification, the chain decided 28 of 40; **every one of the 28 is satisfied by the all-True or the
+all-False assignment**. On these graphs the decoder's votes come out as the all-True assignment, and the verifier also
+tries its complement, the all-False assignment. In a second search restricted to satisfiable formulas that neither
+constant assignment satisfies, the chain decided **0 of 75**. This is what
+the structure of the chain's graph predicts: at the parameters that fit in memory the graph is the same for every formula
+(disjoint copies of one 18-vertex graph), so Salvador's optimal cover cannot carry a formula-specific assignment. The
+`c decided by:` line says which assignment the verifier accepted and whether a constant assignment also satisfies the
+formula, so that a decision by the chain is never mistaken for more than it is.
 
 ## Why SatyPy Cannot Decide 3SAT through the Gap Reduction
 

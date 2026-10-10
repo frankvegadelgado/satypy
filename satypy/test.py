@@ -32,7 +32,7 @@ def main():
                         help="largest 3-SAT formula sent to the exact (Garey-Johnson) Vertex Cover stage (default: 100000)")
     helper.add_argument("-v", "--verbose", action="store_true", help="enable verbose output")
     helper.add_argument("-l", "--log", action="store_true", help="enable file logging")
-    helper.add_argument("--version", action="version", version="%(prog)s 0.0.1")
+    helper.add_argument("--version", action="version", version="%(prog)s 0.0.3")
     args = helper.parse_args()
 
     logger = applogger.Logger(applogger.FileLogger() if args.log else applogger.ConsoleLogger(args.verbose))

@@ -2,13 +2,14 @@ from pathlib import Path
 
 import setuptools
 
-VERSION = "0.0.2"
+VERSION = "0.0.3"
 
 NAME = "satypy"
 
 INSTALL_REQUIRES = [
-    "salvador>=0.1.0",
-    "python-sat>=1.9.dev5",
+    "networkx[default]>=3.4.2",
+    "salvador==0.1.0",
+    "python-sat",
 ]
 
 setuptools.setup(
