@@ -13,9 +13,13 @@ class Formula(list):
 def dimacs(lines):
     """Parses DIMACS CNF content and returns a list of clauses.
 
-    Robust to arbitrary whitespace (tabs, multiple spaces), blank lines,
-    clauses spanning several lines, and SATLIB-style '%' terminators.
-    A literal 0 ends the current clause; stray/trailing zeros are ignored.
+    Robust to arbitrary whitespace (tabs, multiple spaces), blank lines and clauses spanning
+    several lines. Parsing stops at a SATLIB-style '%' terminator (whatever follows it, such as
+    a trailing "0", is not part of the formula). A literal 0 ends the current clause; a 0 that
+    ends no literal is the empty clause (which makes the formula unsatisfiable), unless the
+    "p cnf n m" header shows that all m clauses have already been read, in which case it is a
+    stray terminator and is ignored. Getting this right matters for soundness: dropping an
+    empty clause could turn an unsatisfiable formula into a satisfiable one.
 
     Args:
         lines: A list of lines from the DIMACS file.
@@ -28,10 +32,21 @@ def dimacs(lines):
     """
     clauses = []
     current = []
+    declared = None
 
     for line in lines:
         line = line.strip()
-        if not line or line[0] in ('c', 'p', '%'):
+        if not line or line[0] == 'c':
+            continue
+        if line[0] == '%':
+            break
+        if line[0] == 'p':
+            fields = line.split()
+            if len(fields) >= 4 and fields[1] == 'cnf':
+                try:
+                    declared = int(fields[3])
+                except ValueError:
+                    declared = None
             continue
         for token in line.split():
             try:
@@ -39,7 +54,7 @@ def dimacs(lines):
             except ValueError:
                 raise ValueError(f"Invalid DIMACS token: {token!r}")
             if literal == 0:
-                if current:
+                if current or declared is None or len(clauses) < declared:
                     clauses.append(current)
                     current = []
             else:

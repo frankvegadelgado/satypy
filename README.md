@@ -4,6 +4,14 @@
 
 This work builds upon [SatyPy: SAT Solver](https://github.com/frankvegadelgado/satypy).
 
+SatyPy decides Boolean formulas in CNF by reducing them to **Minimum Vertex Cover** and solving the vertex cover
+instances with [Salvador](https://pypi.org/project/salvador/) 0.1.0. It implements two reductions from 3SAT to Vertex
+Cover: Karp's exact reduction, and the gap reduction behind the Unique Games Theorem reported by the OpenAI Math Team in
+October 2026 (Result Family 102, [openai/math](https://github.com/openai/math/blob/main/lean/docs/102.md)), composed with
+the Vertex Cover reduction of Khot and Regev. **SatyPy never gives a wrong answer**: every `SATISFIABLE` comes with a
+checked assignment (or, for the gap rule, a proved bound), every `UNSATISFIABLE` comes from an exact argument, and
+everything else is `UNKNOWN`.
+
 # Boolean Satisfiability (SAT) Problem
 
 **Problem:** Given a Boolean formula in Conjunctive Normal Form (CNF), is there a truth assignment that makes the formula evaluate to true?
@@ -78,89 +86,86 @@ pip install satypy
 
 ## Running the SAT Solver with SatyPy
 
-**Using SatyPy's built-in benchmarks:**
-
-1. **Install SatyPy's library:**
-
-   If you haven't already, follow the installation steps in the previous section to install SatyPy.
-
-2. **Download SatyPy's library:**
-
-   Download the benchmarks from the GitHub repository.
+Download the repository (it contains sample formulas):
 
 ```bash
 git clone https://github.com/frankvegadelgado/satypy.git
+cd satypy
 ```
 
-3. **Execute the script:**
-
-   Open your terminal or command prompt and navigate to the directory where you downloaded SatyPy (e.g., using `cd satypy`).
-
-   Run the following command to solve a sample `.cnf` file named `file.cnf` included with SatyPy's benchmarks:
+and run `saty` on a DIMACS file (`.cnf`, also compressed as `.xz`, `.lzma`, `.bz2` or `.bzip2`):
 
 ```bash
-   saty -i benchmarks/simple/file.cnf
+saty -i benchmarks/test_formulas/formula2.cnf
 ```
 
-SatyPy supports compressed `.cnf` files, including `.xz`, `.lzma`, `.bz2`, and `.bzip2` formats.
+Variable identifiers may be any positive integers: they need not be `1..n`, contiguous, or sorted.
 
-**Output Interpretation:**
+## Output Interpretation
 
-## If the formula is satisfiable, the console output will display:
+SatyPy prints its answer in the DIMACS output format.
+
+- **Satisfiable, with an assignment:**
+
+  ```
+  s SATISFIABLE
+  v 1 2 -3 0
+  ```
+
+  Positive numbers are variables assigned True, negative numbers variables assigned False, and `0` ends the line. The
+  assignment has been checked against every clause of the input.
+
+- **Satisfiable, without an assignment:** `s SATISFIABLE` with no `v` line. Only the gap rule of the Unique Games
+  chain can produce it, and only with parameters for which the reference proves its bound (see below); in practice it
+  never runs.
+
+- **Unsatisfiable:** `s UNSATISFIABLE`, only when an exact stage proves it.
+
+- **Undecided:** `s UNKNOWN`, preceded by DIMACS comment lines (`c ...`) that report what Salvador found:
+
+  ```
+  c Karp graph: 30 vertices; Salvador cover: 20 vertices, 1 above the bound n + 2m = 19 (satisfiability not determined)
+  c OpenAI/Khot-Regev chain: 12672 vertices; Salvador cover: 8448 vertices (fraction 2/3; satisfiable formulas admit 2/3); gap rule inactive: parameters t=1, h=1, rank-one gadget are below the reference's (t >= 7,097,828, h >= 2, latent gadget)
+  s UNKNOWN
+  ```
+
+## Examples
+
+The directory `benchmarks/test_formulas` contains four small formulas.
 
 ```
+saty -i benchmarks/test_formulas/formula2.cnf
 s SATISFIABLE
-v 2 4 -3 -1 0
+v 1 2 -3 0
 ```
 
-- **`s SATISFIABLE`:** This line indicates that the SAT solver found a satisfying truth assignment for the given formula.
-- **`v 3 -4 -1 -2 0`:** This line provides the satisfying truth assignment.
-  - Positive numbers (e.g., `2`, `4`) represent variables assigned the value "True".
-  - Negative numbers (e.g., `-1`, `-3`) represent variables assigned the value "False".
-  - `0` marks the end of the truth assignment.
-
-## If the formula is unsatisfiable, the console output will display:
+`formula2.cnf` (3 variables, 7 clauses) survives simplification; Salvador finds an optimal cover of its Karp graph,
+which is a satisfying assignment.
 
 ```
-s UNSATISFIABLE
-```
-
-## If the solver cannot decide, the console output will display:
-
-```
+saty -i benchmarks/test_formulas/formula3.cnf
+c Karp graph: 30 vertices; Salvador cover: 20 vertices, 1 above the bound n + 2m = 19 (satisfiability not determined)
+c OpenAI/Khot-Regev chain: 12672 vertices; Salvador cover: 8448 vertices (fraction 2/3; satisfiable formulas admit 2/3); gap rule inactive: parameters t=1, h=1, rank-one gadget are below the reference's (t >= 7,097,828, h >= 2, latent gadget)
 s UNKNOWN
 ```
 
-## SAT Benchmarks and Testing
+`formula3.cnf` contains all eight sign patterns of three variables and is unsatisfiable. No stage of SatyPy can
+refute it: a vertex cover never proves unsatisfiability.
 
-SatyPy includes a collection of sample `.cnf` files in the `benchmarks/file-dimacs-aim` directory. These files can be used to test the functionality of the SAT solver. The files are derived from the well-known [SAT Benchmarks](https://www.cs.ubc.ca/~hoos/SATLIB/Benchmarks/SAT/DIMACS/AIM/descr.html) dataset.
-
-**Running Sample Benchmarks:**
-
-1. **Ensure SatyPy is installed:** Follow the installation steps in the previous section if you haven't already installed SatyPy.
-
-2. **Execute the script:** Open your terminal or command prompt and navigate to the directory where SatyPy was downloaded.
-
-You can then use the `saty` command to run the sample benchmarks. For example, the following commands demonstrate running two sample files:
-
-- Test the satisfiable formula `aim-50-1_6-yes1-1.cnf`:
-
-  ```
-  saty -i benchmarks/file-dimacs-aim/aim-50-1_6-yes1-1.cnf
-  s SATISFIABLE
-  v 2 3 7 8 9 14 17 18 19 20 21 22 23 24 26 27 28 30 31 35 36 38 39 40 41 42 43 46 48 -50 -49 -47 -45 -44 -37 -34 -33 -32 -29 -25 -16 -15 -13 -12 -11 -10 -6 -5 -4 -1 0
-  ```
-
-A satisfiable formula means there exists a truth assignment that makes the formula true. The output will indicate this with s SATISFIABLE followed by the satisfying truth assignment.
-
-- Test the unsatisfiable formula `aim-50-1_6-no-1.cnf`:
-
-  ```
-  saty -i benchmarks/file-dimacs-aim/aim-50-1_6-no-1.cnf
-  s UNSATISFIABLE
-  ```
-
-running these sample benchmarks, you can verify that SatyPy is functioning correctly and gain experience using the `saty`
+```
+batch_saty -i benchmarks/test_formulas -a -b -c
+Test: formula0.cnf
+formula0.cnf: (MiniSat) SATISFIABLE
+formula0.cnf: (Brute Force) SATISFIABLE
+formula0.cnf: (SatyPy) SATISFIABLE
+...
+Test: formula3.cnf
+formula3.cnf: (MiniSat) UNSATISFIABLE
+formula3.cnf: (Brute Force) UNSATISFIABLE
+formula3.cnf: c Karp graph: 30 vertices; Salvador cover: 20 vertices, 1 above the bound n + 2m = 19 (satisfiability not determined)
+formula3.cnf: c OpenAI/Khot-Regev chain: ...
+formula3.cnf: (SatyPy) UNKNOWN
+```
 
 ## Command-Line Options
 
@@ -173,7 +178,7 @@ saty -h
 This will display the help message, which provides information about the available options and their usage:
 
 ```bash
-usage: saty [-h] -i INPUTFILE [-a] [-b] [-c] [-m MAX_CLAUSES] [-v] [-t] [-l] [--version]
+usage: saty [-h] -i INPUTFILE [-a] [-b] [-c] [-m MAX_CLAUSES] [-e MAX_EXACT] [-v] [-t] [-l] [--version]
 
 Solve the Boolean Satisfiability (SAT) problem using a DIMACS file as input.
 
@@ -185,8 +190,11 @@ options:
   -b, --bruteForce      enable comparison with the exponential-time brute-force approach (at most 30 variables)
   -c, --count           only state whether the formula is SATISFIABLE, UNSATISFIABLE or UNKNOWN
   -m MAX_CLAUSES, --max_clauses MAX_CLAUSES
-                        largest 3-SAT formula sent to the Vertex Cover stage (about 1,900 vertices,
-                        11,800 edges and 24 MB per clause; default: 100)
+                        largest 3-SAT formula sent to the Unique Games Vertex Cover stage (about 1,900
+                        vertices, 11,800 edges and 24 MB per clause; 0 skips it; default: 100)
+  -e MAX_EXACT, --max_exact MAX_EXACT
+                        largest 3-SAT formula sent to the exact (Garey-Johnson) Vertex Cover stage
+                        (3 vertices per clause; default: 100000)
   -v, --verbose         Enable verbose output
   -t, --timer           Enable timer output
   -l, --log             Enable file logging
@@ -200,7 +208,8 @@ Available Options:
     -a, --approximation: Also solves the formula with MiniSat 2.2 and reports both answers.
     -b, --bruteForce: Also solves the formula by exhaustive search (skipped above 30 variables).
     -c, --count: Prints only SATISFIABLE, UNSATISFIABLE or UNKNOWN instead of the DIMACS assignment.
-    -m MAX_CLAUSES, --max_clauses MAX_CLAUSES: Larger 3-SAT formulas skip the Vertex Cover stage and are reported as UNKNOWN.
+    -m MAX_CLAUSES, --max_clauses MAX_CLAUSES: Larger 3-SAT formulas skip the Unique Games Vertex Cover stage (0 always skips it).
+    -e MAX_EXACT, --max_exact MAX_EXACT: Larger 3-SAT formulas skip the exact (Garey-Johnson) Vertex Cover stage.
     -v, --verbose: Enables verbose output, providing more detailed information about the solver's progress.
     -t, --timer: Enables timer output, displaying the time taken by the solver to find a solution.
     -l, --log: Enables file logging, writing detailed information about the solver's execution to a log file.
@@ -229,7 +238,7 @@ batch_saty -h
 This will display the following help information:
 
 ```bash
-usage: batch_saty [-h] -i INPUTDIRECTORY [-a] [-b] [-c] [-m MAX_CLAUSES] [-v] [-t] [-l] [--version]
+usage: batch_saty [-h] -i INPUTDIRECTORY [-a] [-b] [-c] [-m MAX_CLAUSES] [-e MAX_EXACT] [-v] [-t] [-l] [--version]
 
 Solve the Boolean Satisfiability (SAT) problem using a directory with DIMACS files as input.
 
@@ -241,7 +250,9 @@ options:
   -b, --bruteForce      enable comparison with the exponential-time brute-force approach (at most 30 variables)
   -c, --count           only state whether each formula is SATISFIABLE, UNSATISFIABLE or UNKNOWN
   -m MAX_CLAUSES, --max_clauses MAX_CLAUSES
-                        largest 3-SAT formula sent to the Vertex Cover stage (default: 100)
+                        largest 3-SAT formula sent to the Unique Games Vertex Cover stage (0 skips it; default: 100)
+  -e MAX_EXACT, --max_exact MAX_EXACT
+                        largest 3-SAT formula sent to the exact (Garey-Johnson) Vertex Cover stage (default: 100000)
   -v, --verbose         Enable verbose output
   -t, --timer           Enable timer output
   -l, --log             Enable file logging
@@ -260,7 +271,7 @@ test_saty -h
 ```
 
 ```bash
-usage: test_saty [-h] -d DIMENSION [-m CLAUSES] [-k WIDTH] [-n NUM_TESTS] [-g] [-r SEED] [-a] [-b] [-c] [-w] [-M MAX_CLAUSES] [-v] [-l] [--version]
+usage: test_saty [-h] -d DIMENSION [-m CLAUSES] [-k WIDTH] [-n NUM_TESTS] [-g] [-r SEED] [-a] [-b] [-c] [-w] [-M MAX_CLAUSES] [-e MAX_EXACT] [-v] [-l] [--version]
 
 options:
   -d DIMENSION, --dimension DIMENSION   number of variables of each formula
@@ -274,7 +285,8 @@ options:
   -c, --count                           only state whether each formula is SATISFIABLE, UNSATISFIABLE or UNKNOWN
   -w, --write                           write each generated formula to a DIMACS file in the current directory
   -M MAX_CLAUSES, --max_clauses MAX_CLAUSES
-                                        largest 3-SAT formula sent to the Vertex Cover stage (default: 100)
+                                        largest 3-SAT formula sent to the Unique Games Vertex Cover stage (0 skips it; default: 100)
+  -e MAX_EXACT, --max_exact MAX_EXACT   largest 3-SAT formula sent to the exact (Garey-Johnson) Vertex Cover stage (default: 100000)
   -v, --verbose                         enable verbose output
   -l, --log                             enable file logging
 ```
@@ -294,30 +306,56 @@ Summary: 1 SATISFIABLE (verified), 0 UNSATISFIABLE, 7 UNKNOWN, 0 disagreements
 
 Variable IDs may be any positive integers (not necessarily `1..n`, contiguous, or sorted).
 
-1. **Simplification** (`reduction.reduce_sat_to_simplified_sat`): unit propagation and pure literals. A conflict proves the
+1. **Empty clause**: a formula containing the empty clause (a lone `0` in DIMACS) is unsatisfiable.
+2. **Simplification** (`reduction.reduce_sat_to_simplified_sat`): unit propagation and pure literals. A conflict proves the
    formula unsatisfiable.
-2. **2-SAT**: if every remaining clause has at most two literals, the formula is decided exactly by the
+3. **2-SAT**: if every remaining clause has at most two literals, the formula is decided exactly by the
    strongly-connected-components algorithm (`algorithm._solve_two_sat`).
-3. **3-SAT → Vertex Cover**: otherwise `reduction.reduce_sat_to_3sat` converts the residual formula to exactly three
-   literals per clause, and `reduction.reduce_3sat_to_unweighted_vertex_cover` runs the chain
+4. **Exact reduction to Vertex Cover**: otherwise `reduction.reduce_sat_to_3sat` converts the residual formula to exactly
+   three literals per clause and `reduction.reduce_3sat_to_exact_vertex_cover` builds Karp's graph in the form of Garey
+   and Johnson (an edge per variable, a triangle per clause, an edge from each corner to its literal; `2n + 3m` vertices).
+   The formula is satisfiable if and only if this graph has a vertex cover of `n + 2m` vertices, and every cover has at
+   least that many. [Salvador](https://pypi.org/project/salvador/) 0.1.0 computes a cover; if it has exactly `n + 2m`
+   vertices it is optimal and `reduction.decode_exact_vertex_cover` reads a satisfying assignment from it.
+5. **OpenAI/Khot–Regev chain** (at most `-m` 3-SAT clauses): `reduction.reduce_3sat_to_unweighted_vertex_cover`
+   implements the gap reduction of the reference,
 
    ```
    3SAT → weighted parity (exact 10-equation gadget) → translation Unique Game (matrix test, OpenAI 2026, §4)
-        → unweighted simple bipartite game (rounding + subdivision, Lemma 7.1) → strong-left form (Khot–Regev)
-        → p-biased Vertex Cover graph (Khot–Regev 2008) → unweighted graph (blow-up)
+        → unweighted simple bipartite game (rounding + subdivision, Lemma 7.1) → parallel repetition
+        → strong-left form (Khot–Regev) → p-biased Vertex Cover graph (Khot–Regev 2008) → unweighted graph
    ```
 
-   With `p = 1/3`, a satisfiable formula admits a cover of at most 2/3 of the vertices, so the relevant approximation
-   threshold is 1.5. The cover is computed by [Salvador](https://pypi.org/project/salvador/) 0.1.0
-   (`from salvador.algorithm import find_vertex_cover`), decoded back into a truth assignment
-   (`reduction.decode_vertex_cover_to_assignment`), and **verified** against the original formula.
+   then runs Salvador. With `p = 1/3` a satisfiable formula admits a cover of 2/3 of the vertices (threshold ratio 1.5).
+   Two ways of concluding are implemented:
+   - the **gap rule** (`reduction.gap_rule`): if unsatisfiable formulas provably need covers of at least a fraction
+     `b` of the vertices and Salvador's cover is smaller, the formula is satisfiable and SatyPy prints
+     `s SATISFIABLE` without a `v` line. It runs only when the parameters meet the reference
+     (`reduction.reference_parameters_met`: the latent gadget of Lemma 3.1, repetition exponent
+     `t ≥ 10,240,000 ln 2 ≈ 7,097,828`, sequence length `h ≥ 2`) and refuses otherwise. Such instances have at least
+     `4^7,097,828` edges and cannot be stored, so the rule never runs in practice;
+   - **decoding** (`reduction.decode_vertex_cover_to_assignment`) of Salvador's cover into an assignment, which is
+     then verified.
 
-SatyPy prints `s SATISFIABLE` only with a verified assignment and `s UNSATISFIABLE` only when steps 1–2 prove it. A
-decoded assignment that fails verification gives `s UNKNOWN`: the Khot–Regev gap needs very large parameters (the
-reference's repetition exponent alone is at least 10,240,000·log(1/δ)), and at the small parameters used here
-the Unique Game takes the same value under every assignment, so the Vertex Cover does not determine satisfiability and
-no unsatisfiability is ever inferred from it. Use `-l` to see each stage (instance sizes, cover fraction, ratio bound)
-in `app.log`.
+   At the parameters that fit in memory (`p = 1/3`, `ℓ = k = t = h = 1`) the graph is a disjoint union of copies of
+   one 18-vertex graph whose minimum cover is 12, for every formula, so this stage cannot tell satisfiable and
+   unsatisfiable formulas apart (see Experiments below).
+
+When a Vertex Cover stage runs without deciding, SatyPy prints DIMACS comment lines before `s UNKNOWN`, for example:
+
+```
+c Karp graph: 30 vertices; Salvador cover: 20 vertices, 1 above the bound n + 2m = 19 (satisfiability not determined)
+c OpenAI/Khot-Regev chain: 12672 vertices; Salvador cover: 8448 vertices (fraction 2/3; satisfiable formulas admit 2/3); gap rule inactive: parameters t=1, h=1, rank-one gadget are below the reference's (t >= 7,097,828, h >= 2, latent gadget)
+s UNKNOWN
+```
+
+**SatyPy never gives a wrong answer.** `s SATISFIABLE` is printed only after the assignment has been checked to be
+consistent and to contain a literal of every clause of the input (a final certification gate in `algorithm.solve`), and
+`s UNSATISFIABLE` only when steps 1–3 prove it; `s SATISFIABLE` without an assignment only from the gap rule, with
+parameters for which the reference proves the bound. Everything else is `s UNKNOWN`. In particular a vertex cover is never used
+to conclude unsatisfiability: that would need a certified lower bound above `n + 2m`, which Salvador does not provide.
+So unsatisfiable formulas that steps 1–3 cannot refute, and satisfiable formulas on which Salvador's cover is not exactly
+optimal, are reported as `UNKNOWN`. Use `-l` to see each stage in `app.log`.
 
 References: OpenAI Math Team, *The Unique Games Conjecture and Optimal Approximation Thresholds* (Result Family 102,
 [openai/math](https://github.com/openai/math/blob/main/lean/docs/102.md), 2026); S. Khot and O. Regev, *Vertex cover
@@ -325,22 +363,77 @@ might be hard to approximate to within 2 − ε*, J. Comput. System Sci. 74 (200
 
 ## Experiments
 
-`experiments/run_benchmarks.py` runs SatyPy and a reference solver from python-sat on directories of DIMACS files and
-writes one CSV row per instance (expected answer from AIM file names, reference answer and time, deciding stage, sizes of
-the parity instance, Unique Game and Vertex Cover graph, Salvador's cover and time, peak memory):
+All numbers below were measured with SatyPy 0.0.1 and Salvador 0.1.0 (defaults) on a machine with 2 CPU cores and
+8 GB of memory. Python randomises the iteration order of hashed objects from one run to the next, which can change
+Salvador's tie-breaking, so counts may vary slightly between runs; the soundness of the answers cannot.
 
-```bash
-python -m experiments.run_benchmarks -j 2 -s 300 -m 100 -o experiments/results.csv \
-    benchmarks/file-dimacs-aim benchmarks/sat23 benchmarks/sat24
-python -m experiments.run_benchmarks -r cadical195 -s 3600 -o prp.csv <directory with PRP_40_40.cnf.xz>
-```
+**Soundness.** On 5,000 random formulas with 1 to 12 variables (non-contiguous identifiers, clause widths 1 to 5,
+duplicate literals, tautologies, unit clauses, occasional empty clauses), compared with exhaustive search, SatyPy
+returned a checked assignment for 2,809 of the 2,813 satisfiable formulas, proved 2,152 of the 2,187 unsatisfiable ones,
+and answered `UNKNOWN` on 39. **No answer was wrong.**
 
-Results on the 72 AIM instances and the 12 SAT Competition 2023/2024 instances are in `experiments/results.csv` and
-`experiments/results_pass2.csv`. SatyPy never answered incorrectly and answered `UNKNOWN` on all 84 instances. Every
-Vertex Cover graph it built (147,312 to 311,112 vertices, up to 1.9 million edges) was covered optimally by Salvador with exactly 2/3 of the
-vertices: at the default parameters the graph is a disjoint union of copies of one 18-vertex graph with minimum cover 12,
-so it does not depend on whether the formula is satisfiable. MiniSat decided all AIM instances in at most 2 ms and 11
-of the 12 competition instances within 300 s; CaDiCaL proved `PRP_40_40` satisfiable in 35 s.
+**Karp stage on random 3SAT** (`test_saty -d n -m m -n 50 -r 1 -g -a -c -M 0`, 50 formulas per size): SatyPy found and
+checked an assignment for
+
+| Variables | Clauses | Satisfiable (MiniSat) | Solved by SatyPy | Wrong |
+|---|---|---|---|---|
+| 10 | 30 | 50 | 47 | 0 |
+| 12 | 51 | 37 | 16 | 0 |
+| 20 | 80 | 43 | 11 | 0 |
+| 30 | 120 | 42 | 5 | 0 |
+| 50 | 210 | 32 | 0 | 0 |
+
+The Karp stage needs an *optimal* cover: a cover one vertex above `n + 2m` reveals nothing, and near the satisfiability
+threshold Salvador's cover is more often one or more vertices above it as formulas grow.
+
+**OpenAI/Khot–Regev chain on very small formulas.** The chain was run at its default parameters (`p = 1/3`, `ℓ = k = t = h = 1`) on 35
+very small 3SAT formulas: the two 3SAT formulas of `benchmarks/test_formulas`, 27 random formulas with 3 to 5 variables
+and 4 to 12 clauses (all satisfiable), and 6 random unsatisfiable formulas with 3 or 4 variables and 16 clauses, giving
+Vertex Cover graphs of 6,912 to 24,840 vertices and 43,008 to 154,560 edges (at most 36 seconds per formula, Salvador
+included).
+
+| Measurement | Result |
+|---|---|
+| Graph size equals the proved `36·\|E(H)\|` vertices and `224·\|E(H)\|` edges | 35 of 35 |
+| Salvador's cover equals the proved optimum `2N/3` (ratio exactly 1) | 35 of 35 |
+| Cover built from a satisfying assignment (completeness of the chain) | 28 of 28 satisfiable, 0.6875–0.6889 of the vertices |
+| Decoding that cover gives back a satisfying assignment (round trip) | 28 of 28 |
+| Decoding Salvador's cover gives a satisfying assignment | 6 of 28 (a blind random guess would succeed on 9.7 on average) |
+| Unsatisfiable formulas whose optimal cover differs from `2N/3` | 0 of 7 |
+| Gap rule applicable | 0 of 35 (parameters below the reference's) |
+| SatyPy's final answer | 28 `SATISFIABLE` (23 from the Karp stage, 5 from simplification), 7 `UNKNOWN`, 0 wrong |
+
+So, at sizes that can be built, the chain behaves exactly as its completeness argument says (a satisfying assignment
+gives a cover of about 0.688 of the vertices, and the decoder inverts it), and Salvador always reaches the optimum 2/3.
+But unsatisfiable formulas reach the same 2/3, and Salvador's optimal cover decodes to a satisfying assignment no more
+often than chance: at these parameters the chain carries no information about satisfiability, and every decision above
+was made by simplification or by the Karp stage.
+
+## Why SatyPy Cannot Decide 3SAT through the Gap Reduction
+
+The gap reduction decides satisfiability only at the parameters for which the reference proves its soundness: the latent
+alphabet gadget of its Lemma 3.1, a repetition exponent `t ≥ 10,240,000 · ln 2 ≈ 7,097,828` (its Section 7.2), and a
+long sequence construction. The repeated game alone then has at least `4^7,097,828` edges (a number with about 4.3
+million digits) for a single clause, which no computer can store. At the parameters that fit in memory the reduction
+loses its gap: the clause-to-parity gadget keeps it (7/10 against at most 7/10 − 1/(5m)), the rank-one matrix test
+with a two-letter alphabet gives every assignment the same value 3/4, and the sequence construction with `h = 1` makes
+the game trivially satisfiable. The resulting graph is a disjoint union of copies of one 18-vertex graph with minimum
+cover 12, for every formula. Every known reduction from 3SAT to Vertex Cover with a constant gap goes through the PCP
+theorem and has astronomically large constants, and a proof that Salvador achieves a ratio below 2 on the gap instances
+would itself imply P = NP. SatyPy therefore implements the chain faithfully, uses it with a guarded gap rule and a
+verified decoder, and reports honestly when it cannot decide.
+
+## References
+
+- OpenAI Math Team, *The Unique Games Conjecture and Optimal Approximation Thresholds* (Result Family 102), GitHub
+  repository [openai/math](https://github.com/openai/math/blob/main/lean/docs/102.md), October 2026.
+- S. Khot and O. Regev, *Vertex cover might be hard to approximate to within 2 − ε*, J. Comput. System Sci. 74 (2008)
+  335–349.
+- R. M. Karp, *Reducibility among combinatorial problems*, 1972; M. R. Garey and D. S. Johnson, *Computers and
+  Intractability*, Freeman, 1979.
+- B. Aspvall, M. F. Plass and R. E. Tarjan, *A linear-time algorithm for testing the truth of certain quantified
+  Boolean formulas*, Inform. Process. Lett. 8 (1979) 121–123.
+- F. Vega, [Salvador 0.1.0](https://pypi.org/project/salvador/).
 
 ## Implementation
 

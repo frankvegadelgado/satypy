@@ -27,7 +27,9 @@ def main():
     helper.add_argument("-w", "--write", action="store_true",
                         help="write each generated formula to a DIMACS file in the current directory")
     helper.add_argument("-M", "--max_clauses", type=int, default=100,
-                        help="largest 3-SAT formula sent to the Vertex Cover stage (default: 100)")
+                        help="largest 3-SAT formula sent to the Unique Games Vertex Cover stage (0 skips it; default: 100)")
+    helper.add_argument("-e", "--max_exact", type=int, default=100000,
+                        help="largest 3-SAT formula sent to the exact (Garey-Johnson) Vertex Cover stage (default: 100000)")
     helper.add_argument("-v", "--verbose", action="store_true", help="enable verbose output")
     helper.add_argument("-l", "--log", action="store_true", help="enable file logging")
     helper.add_argument("--version", action="version", version="%(prog)s 0.0.1")
@@ -67,12 +69,12 @@ def main():
 
         logger.info("Our Algorithm started")
         started = time.time()
-        satisfiability, answer = algorithm.solve(formula, logger, max_vc_clauses=args.max_clauses)
+        satisfiability, answer = algorithm.solve(formula, logger, max_vc_clauses=args.max_clauses, max_exact_clauses=args.max_exact)
         logger.info(f"Our Algorithm done in: {(time.time() - started) * 1000.0} milliseconds")
         report(f"{i + 1}-SatyPy Test: {utils.string_result_format(satisfiability, answer, args.count)}")
 
         if satisfiability is True:
-            if not utils.satisfies(formula, answer):
+            if answer is not None and not utils.satisfies(formula, answer):
                 summary["disagreements"] += 1
                 report(f"{i + 1}-ERROR: the SatyPy assignment does not satisfy the formula")
             else:

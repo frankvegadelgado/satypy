@@ -73,12 +73,15 @@ def format_solution(answer, max_length=4096):
     return '\n'.join(lines)
 
 def dimacs_result(satisfiability, answer):
-    """DIMACS solution lines: "s SATISFIABLE" plus "v ... 0" (literals sorted by variable),
-    "s UNSATISFIABLE", or "s UNKNOWN"."""
+    """DIMACS solution lines: "s SATISFIABLE" plus "v ... 0" (literals sorted by variable; no "v"
+    line when satisfiability is certified without an assignment), "s UNSATISFIABLE", or
+    "s UNKNOWN"."""
     if satisfiability is None:
         return "s UNKNOWN"
     if not satisfiability:
         return "s UNSATISFIABLE"
+    if answer is None:  # satisfiability certified without an assignment (gap rule)
+        return "s SATISFIABLE"
     return format_solution([*sorted(answer, key=abs), 0])
 
 

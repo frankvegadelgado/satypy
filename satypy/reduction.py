@@ -454,9 +454,112 @@ def reduce_3sat_to_unweighted_vertex_cover(clauses, max_variable, p=Fraction(1, 
     weighted, vertex_weights = reduce_unique_games_to_vertex_cover(Phi, p)
     graph, L = reduce_weighted_vertex_cover_to_unweighted(weighted, vertex_weights)
     info = {"matrix_game": H, "bipartite_game": B, "unique_game": G, "strong_left_game": Phi, "p": p,
-            "equations": len(equations), "graph": graph,
-            "yes_cover_fraction": 1 - p, "threshold_ratio": 1 / (1 - p)}
+            "equations": len(equations), "parity": (equations, weights), "first_auxiliary": max_variable + 1,
+            "graph": graph, "parameters": {"ell": ell, "k": k, "tau": tau, "t": t, "h": h},
+            "gadget": H.gadget, "yes_cover_fraction": 1 - p, "threshold_ratio": 1 / (1 - p)}
     return graph, info
+
+
+# ---------------------------------------------------------------------------
+# The gap rule and the parameters of the reference
+# ---------------------------------------------------------------------------
+
+# Section 7.2 of the reference: the repetition exponent must satisfy (1 - 1/10240000)^t <= delta0
+# with delta0 <= delta < 1/2, so t >= 10240000 * ln 2 > 7,097,827 even at the weakest soundness.
+REFERENCE_MIN_REPETITION = 7_097_828
+
+
+def reference_parameters_met(parameters, gadget):
+    """Necessary conditions for the soundness of the chain (OpenAI 2026, Theorem 1.1, and
+    Khot-Regev): the latent alphabet gadget of Lemma 3.1 (not the plain rank-one test), a
+    repetition exponent t >= 10,240,000 ln 2, and a sequence length h >= 2 (the soundness of the
+    sequence construction is about 1/h). Below these values no lower bound on the covers of
+    unsatisfiable formulas is proved, and at the defaults the graph does not depend on
+    satisfiability at all. Instances meeting them cannot be stored: the repeated game alone has
+    at least 4^7,097,828 edges."""
+    return (getattr(gadget, "latent", False) and parameters["t"] >= REFERENCE_MIN_REPETITION
+            and parameters["h"] >= 2)
+
+
+def gap_rule(info, cover_size, no_bound):
+    """The decision rule of the gap reduction: if unsatisfiable formulas provably need covers of
+    at least `no_bound` (a fraction of the vertices, given by the soundness theorem for the
+    parameters used) and Salvador's cover is smaller, the formula is satisfiable; no assignment
+    is produced. Returns True when the rule certifies satisfiability, False otherwise. Refuses to
+    run with parameters for which no such bound is proved."""
+    if not reference_parameters_met(info["parameters"], info["gadget"]):
+        raise ValueError("no soundness bound is proved for these parameters")
+    return Fraction(cover_size, info["graph"].number_of_nodes()) < Fraction(no_bound)
+
+
+# ---------------------------------------------------------------------------
+# Completeness: from a satisfying assignment to a cover of the chain's graph
+# ---------------------------------------------------------------------------
+
+def complete_parity_assignment(equations, assignment, first_auxiliary):
+    """Extend `assignment` (variable -> bit on the formula's variables) by the best choice of the
+    two auxiliaries of every clause gadget (variables >= first_auxiliary)."""
+    assignment = {v: b for v, b in assignment.items() if v < first_auxiliary}
+    auxiliaries = list(dict.fromkeys(v for eq in equations for v in eq[:3] if v >= first_auxiliary))
+    for index in range(0, len(auxiliaries), 2):
+        pair = auxiliaries[index:index + 2]
+        local = [eq for eq in equations if any(v in pair for v in eq[:3])]
+        best, best_bits = -1, None
+        for bits in product((0, 1), repeat=len(pair)):
+            trial = dict(assignment)
+            trial.update(zip(pair, bits, strict=True))
+            count = sum(1 for (a, b, c, rhs) in local if trial.get(a, 0) ^ trial.get(b, 0) ^ trial.get(c, 0) == rhs)
+            if count > best:
+                best, best_bits = count, bits
+        assignment.update(zip(pair, best_bits, strict=True))
+    return assignment
+
+
+def certified_cover_from_assignment(info, literals):
+    """The completeness direction of the chain: the labeling induced by an assignment (Lemma 4.3 of
+    the reference, lifted through subdivision, repetition and the sequence construction) and the
+    Khot-Regev independent set {(u, S): u strongly satisfied, label(u) in S}. Returns the cover of
+    the unweighted graph formed by the remaining vertices, and the strongly satisfied left weight
+    (the cover has a fraction 1 - p * weight of the vertices)."""
+    H, B, G, Phi = info["matrix_game"], info["bipartite_game"], info["unique_game"], info["strong_left_game"]
+    equations, _ = info["parity"]
+    bits = complete_parity_assignment(equations, {abs(lit): int(lit > 0) for lit in literals}, info["first_auxiliary"])
+    gadget = H.gadget
+    label_h = {}
+    for vertex in {x for edge in H.edges for x in edge[:2]}:
+        support, w_intercept = vertex
+        value = w_intercept << gadget.dim_k
+        for slot in support:
+            if slot[0] == "v":
+                if bits.get(slot[1], 0):
+                    value ^= slot[3]
+            else:
+                v1, v2 = equations[slot[1]][0], equations[slot[1]][1]
+                if bits.get(v1, 0):
+                    value ^= slot[3]
+                if bits.get(v2, 0):
+                    value ^= slot[4]
+        label_h[vertex] = gadget.restore(value)
+    label_b = {}
+    for index in range(0, len(B.edges), 4):
+        (u, p_e, _), (q_e, _, _), (_, r_e, _), (v, _, _) = B.edges[index:index + 4]
+        label_b[u], label_b[v] = label_h[u[1]], label_h[v[1]]
+        label_b[p_e] = label_b[q_e] = label_b[r_e] = label_h[u[1]]
+    label_g = {}
+    for vertex in {x for edge in G.edges for x in edge[:2]}:
+        label = 0
+        for position, coordinate in enumerate(vertex):
+            label |= label_b[coordinate] << (B.dim * position)
+        label_g[vertex] = label
+    label_phi = {}
+    for u, v, _ in Phi.edges:
+        label_phi[u], label_phi[v] = label_g[u[0]], label_g[v[0]]
+    violated = {u for u, v, shift in Phi.edges if label_phi[v] != label_phi[u] ^ shift}
+    independent = {(u, S) for u in Phi.left if u not in violated
+                   for S in range(1 << Phi.alphabet_size) if (S >> label_phi[u]) & 1}
+    cover = {node for node in info["graph"].nodes() if node[0] not in independent}
+    weights = Phi.left_weights()
+    return cover, sum(w for u, w in weights.items() if u not in violated)
 
 
 # ---------------------------------------------------------------------------
@@ -551,3 +654,33 @@ def approximate_vertex_cover(graph):
     """Salvador 0.1.0 (worst-case ratio at most 2). Returns (cover, matching_lower_bound)."""
     from salvador.algorithm import find_vertex_cover  # noqa: PLC0415  (lazy: keeps scipy out of import time)
     return set(find_vertex_cover(graph)), len(nx.maximal_matching(graph))
+
+
+# ---------------------------------------------------------------------------
+# Exact reduction 3SAT -> Vertex Cover (Karp; Garey and Johnson)
+# ---------------------------------------------------------------------------
+
+def reduce_3sat_to_exact_vertex_cover(clauses):
+    """Karp's reduction in the form of Garey and Johnson: an edge (x, -x) for every variable,
+    a triangle for every clause, and an edge from each corner to the vertex of its literal.
+    Vertices are ("lit", literal) and ("cl", clause index, position). The formula, with n
+    variables and m clauses of three distinct literals, is satisfiable if and only if the graph
+    has a vertex cover of size n + 2m; every cover has at least n + 2m vertices.
+    Returns (graph, n + 2m)."""
+    graph = nx.Graph()
+    variables = {abs(lit) for clause in clauses for lit in clause}
+    graph.add_edges_from((("lit", v), ("lit", -v)) for v in variables)
+    for index, clause in enumerate(clauses):
+        corners = [("cl", index, position) for position in range(3)]
+        graph.add_edges_from([(corners[0], corners[1]), (corners[1], corners[2]), (corners[0], corners[2])])
+        graph.add_edges_from((corner, ("lit", lit)) for corner, lit in zip(corners, clause, strict=True))
+    return graph, len(variables) + 2 * len(clauses)
+
+
+def decode_exact_vertex_cover(cover):
+    """The literals whose vertex lies in the cover (and whose complement does not). For a cover
+    of size exactly n + 2m this is a satisfying assignment: the cover holds one vertex of every
+    variable edge and two corners of every triangle, and the edge from the third corner forces
+    its literal into the cover."""
+    literals = {node[1] for node in cover if node[0] == "lit"}
+    return {lit for lit in literals if -lit not in literals}

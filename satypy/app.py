@@ -16,7 +16,7 @@ from . import algorithm
 BRUTE_FORCE_MAX_VARIABLES = 30
 
 
-def sat_solver(inputFile, verbose=False, timed=False, log=False, bruteForce=False, approximation=False, count=False, max_clauses=100):
+def sat_solver(inputFile, verbose=False, timed=False, log=False, bruteForce=False, approximation=False, count=False, max_clauses=100, max_exact=100000):
     """Solves a CNF formula.
 
     Args:
@@ -27,7 +27,8 @@ def sat_solver(inputFile, verbose=False, timed=False, log=False, bruteForce=Fals
         bruteForce: Also solve by exhaustive search (formulas with at most 30 variables).
         approximation: Also solve with a known SAT solver (MiniSat 2.2 via python-sat).
         count: Only state SATISFIABLE / UNSATISFIABLE / UNKNOWN instead of the assignment.
-        max_clauses: Largest 3-SAT formula sent to the Vertex Cover stage (None: no limit).
+        max_clauses: Largest 3-SAT formula sent to the Unique Games Vertex Cover stage (0: skip it; None: no limit).
+        max_exact: Largest 3-SAT formula sent to the exact (Garey-Johnson) Vertex Cover stage (None: no limit).
     """
 
     logger = applogger.Logger(applogger.FileLogger() if (log) else applogger.ConsoleLogger(verbose))
@@ -73,18 +74,22 @@ def sat_solver(inputFile, verbose=False, timed=False, log=False, bruteForce=Fals
     if timed:
         started = time.time()
 
-    satisfiability, answer = algorithm.solve(formula, logger, max_vc_clauses=max_clauses)
+    stats = {}
+    satisfiability, answer = algorithm.solve(formula, logger, stats=stats, max_vc_clauses=max_clauses,
+                                             max_exact_clauses=max_exact)
 
     if timed:
         utils.println(f"Solving the problem done in: {(time.time() - started) * 1000.0} milliseconds", logger)
     else:
         utils.println("Solving the problem done", logger)
 
-    # Output the solution
+    # Output the solution, preceded by DIMACS comment lines on what the Vertex Cover stages found
+    for comment in stats.get("comments", []):
+        utils.output(f"{filename}: {comment}" if comparing else comment, logger, verbose or log)
     result = utils.string_result_format(satisfiability, answer, count)
     utils.output(f"{filename}: (SatyPy) {result}" if comparing else result, logger, verbose or log)
 
-    if satisfiability is True and not utils.satisfies(formula, answer):
+    if satisfiability is True and answer is not None and not utils.satisfies(formula, answer):
         utils.output("c ERROR: the SatyPy assignment does not satisfy the formula", logger, verbose or log)
     if reference is not None and satisfiability is not None and satisfiability != reference[0]:
         utils.output("c ERROR: SatyPy disagrees with the reference solver", logger, verbose or log)
@@ -106,7 +111,8 @@ def main():
     helper.add_argument('-a', '--approximation', action='store_true', help='enable comparison with a known SAT solver (MiniSat 2.2 via python-sat)')
     helper.add_argument('-b', '--bruteForce', action='store_true', help='enable comparison with the exponential-time brute-force approach (at most 30 variables)')
     helper.add_argument('-c', '--count', action='store_true', help='only state whether the formula is SATISFIABLE, UNSATISFIABLE or UNKNOWN')
-    helper.add_argument('-m', '--max_clauses', type=int, default=100, help='largest 3-SAT formula sent to the Vertex Cover stage (about 1,900 vertices, 11,800 edges and 24 MB per clause; default: 100)')
+    helper.add_argument('-m', '--max_clauses', type=int, default=100, help='largest 3-SAT formula sent to the Unique Games Vertex Cover stage (about 1,900 vertices, 11,800 edges and 24 MB per clause; 0 skips it; default: 100)')
+    helper.add_argument('-e', '--max_exact', type=int, default=100000, help='largest 3-SAT formula sent to the exact (Garey-Johnson) Vertex Cover stage (3 vertices per clause; default: 100000)')
     helper.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
     helper.add_argument('-t', '--timer', action='store_true', help='Enable timer output')
     helper.add_argument('-l', '--log', action='store_true', help='Enable file logging')
@@ -121,7 +127,8 @@ def main():
                bruteForce=args.bruteForce,
                approximation=args.approximation,
                count=args.count,
-               max_clauses=args.max_clauses)
+               max_clauses=args.max_clauses,
+               max_exact=args.max_exact)
 
 
 if __name__ == "__main__":
