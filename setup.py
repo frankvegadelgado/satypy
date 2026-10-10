@@ -7,7 +7,8 @@ VERSION = "0.0.1"
 NAME = "satypy"
 
 INSTALL_REQUIRES = [
-    "networkx[default]>=3.4.2",
+    "salvador>=0.1.0",
+    "python-sat>=1.9.dev5",
 ]
 
 setuptools.setup(
@@ -44,7 +45,8 @@ setuptools.setup(
     entry_points={
         'console_scripts': [
             'saty = satypy.app:main',
-            'batch_saty = satypy.batch:main'
+            'batch_saty = satypy.batch:main',
+            'test_saty = satypy.test:main'
         ]
     }
 )

@@ -1,4 +1,4 @@
-# SatyPy: SAT Solver
+# SatyPy: SAT Solver through Unique Games and Vertex Cover
 
 ![SatyPy: SAT Solver](docs/satypy.png)
 
@@ -173,7 +173,7 @@ saty -h
 This will display the help message, which provides information about the available options and their usage:
 
 ```bash
-usage: saty [-h] -i INPUTFILE [-b] [-v] [-t] [-l] [--version]
+usage: saty [-h] -i INPUTFILE [-a] [-b] [-c] [-m MAX_CLAUSES] [-v] [-t] [-l] [--version]
 
 Solve the Boolean Satisfiability (SAT) problem using a DIMACS file as input.
 
@@ -181,6 +181,12 @@ options:
   -h, --help            show this help message and exit
   -i INPUTFILE, --inputFile INPUTFILE
                         Input file path
+  -a, --approximation   enable comparison with a known SAT solver (MiniSat 2.2 via python-sat)
+  -b, --bruteForce      enable comparison with the exponential-time brute-force approach (at most 30 variables)
+  -c, --count           only state whether the formula is SATISFIABLE, UNSATISFIABLE or UNKNOWN
+  -m MAX_CLAUSES, --max_clauses MAX_CLAUSES
+                        largest 3-SAT formula sent to the Vertex Cover stage (about 1,900 vertices,
+                        11,800 edges and 24 MB per clause; default: 100)
   -v, --verbose         Enable verbose output
   -t, --timer           Enable timer output
   -l, --log             Enable file logging
@@ -191,9 +197,22 @@ Available Options:
 
     -h, --help: Displays this help message and exits the program.
     -i INPUTFILE, --inputFile INPUTFILE: Specifies the path to the input file containing the Boolean formula. This option is required.
+    -a, --approximation: Also solves the formula with MiniSat 2.2 and reports both answers.
+    -b, --bruteForce: Also solves the formula by exhaustive search (skipped above 30 variables).
+    -c, --count: Prints only SATISFIABLE, UNSATISFIABLE or UNKNOWN instead of the DIMACS assignment.
+    -m MAX_CLAUSES, --max_clauses MAX_CLAUSES: Larger 3-SAT formulas skip the Vertex Cover stage and are reported as UNKNOWN.
     -v, --verbose: Enables verbose output, providing more detailed information about the solver's progress.
     -t, --timer: Enables timer output, displaying the time taken by the solver to find a solution.
     -l, --log: Enables file logging, writing detailed information about the solver's execution to a log file.
+
+With `-a` or `-b` every answer is prefixed by its source and any disagreement is reported, for example:
+
+```
+saty -i benchmarks/simple/file.cnf -a -b -c
+file.cnf: (MiniSat) SATISFIABLE
+file.cnf: (Brute Force) SATISFIABLE
+file.cnf: (SatyPy) SATISFIABLE
+```
 
 By using these command-line options, you can customize the behavior of the `saty` command to suit your specific needs.
 
@@ -210,7 +229,7 @@ batch_saty -h
 This will display the following help information:
 
 ```bash
-usage: batch_saty [-h] -i INPUTDIRECTORY [-b] [-v] [-t] [-l] [--version]
+usage: batch_saty [-h] -i INPUTDIRECTORY [-a] [-b] [-c] [-m MAX_CLAUSES] [-v] [-t] [-l] [--version]
 
 Solve the Boolean Satisfiability (SAT) problem using a directory with DIMACS files as input.
 
@@ -218,11 +237,110 @@ options:
   -h, --help            show this help message and exit
   -i INPUTDIRECTORY, --inputDirectory INPUTDIRECTORY
                         Input directory path
+  -a, --approximation   enable comparison with a known SAT solver (MiniSat 2.2 via python-sat)
+  -b, --bruteForce      enable comparison with the exponential-time brute-force approach (at most 30 variables)
+  -c, --count           only state whether each formula is SATISFIABLE, UNSATISFIABLE or UNKNOWN
+  -m MAX_CLAUSES, --max_clauses MAX_CLAUSES
+                        largest 3-SAT formula sent to the Vertex Cover stage (default: 100)
   -v, --verbose         Enable verbose output
   -t, --timer           Enable timer output
   -l, --log             Enable file logging
   --version             show program's version number and exit
 ```
+
+The options have the same meaning as for `saty` and apply to every file of the directory (processed in name order).
+
+### Testing with Random Formulas
+
+The `test_saty` command generates random CNF formulas and compares SatyPy against a brute-force search (`-b`) and
+against MiniSat 2.2 through [python-sat](https://pypi.org/project/python-sat/) (`-a`):
+
+```bash
+test_saty -h
+```
+
+```bash
+usage: test_saty [-h] -d DIMENSION [-m CLAUSES] [-k WIDTH] [-n NUM_TESTS] [-g] [-r SEED] [-a] [-b] [-c] [-w] [-M MAX_CLAUSES] [-v] [-l] [--version]
+
+options:
+  -d DIMENSION, --dimension DIMENSION   number of variables of each formula
+  -m CLAUSES, --clauses CLAUSES         number of clauses (default: round(4.26 * dimension))
+  -k WIDTH, --width WIDTH               literals per clause (default: 3)
+  -n NUM_TESTS, --num_tests NUM_TESTS   number of tests to run
+  -g, --gaps                            use random non-contiguous variable IDs instead of 1..dimension
+  -r SEED, --seed SEED                  random seed
+  -a, --approximation                   enable comparison with a known SAT solver (MiniSat 2.2 via python-sat)
+  -b, --bruteForce                      enable comparison with the exponential-time brute-force approach
+  -c, --count                           only state whether each formula is SATISFIABLE, UNSATISFIABLE or UNKNOWN
+  -w, --write                           write each generated formula to a DIMACS file in the current directory
+  -M MAX_CLAUSES, --max_clauses MAX_CLAUSES
+                                        largest 3-SAT formula sent to the Vertex Cover stage (default: 100)
+  -v, --verbose                         enable verbose output
+  -l, --log                             enable file logging
+```
+
+Example:
+
+```
+test_saty -d 6 -m 12 -n 8 -g -r 7 -a -b -c
+1-MiniSat Test: SATISFIABLE
+1-Brute Force Test: SATISFIABLE
+1-SatyPy Test: UNKNOWN
+...
+Summary: 1 SATISFIABLE (verified), 0 UNSATISFIABLE, 7 UNKNOWN, 0 disagreements
+```
+
+## How SatyPy Solves a Formula
+
+Variable IDs may be any positive integers (not necessarily `1..n`, contiguous, or sorted).
+
+1. **Simplification** (`reduction.reduce_sat_to_simplified_sat`): unit propagation and pure literals. A conflict proves the
+   formula unsatisfiable.
+2. **2-SAT**: if every remaining clause has at most two literals, the formula is decided exactly by the
+   strongly-connected-components algorithm (`algorithm._solve_two_sat`).
+3. **3-SAT → Vertex Cover**: otherwise `reduction.reduce_sat_to_3sat` converts the residual formula to exactly three
+   literals per clause, and `reduction.reduce_3sat_to_unweighted_vertex_cover` runs the chain
+
+   ```
+   3SAT → weighted parity (exact 10-equation gadget) → translation Unique Game (matrix test, OpenAI 2026, §4)
+        → unweighted simple bipartite game (rounding + subdivision, Lemma 7.1) → strong-left form (Khot–Regev)
+        → p-biased Vertex Cover graph (Khot–Regev 2008) → unweighted graph (blow-up)
+   ```
+
+   With `p = 1/3`, a satisfiable formula admits a cover of at most 2/3 of the vertices, so the relevant approximation
+   threshold is 1.5. The cover is computed by [Salvador](https://pypi.org/project/salvador/) 0.1.0
+   (`from salvador.algorithm import find_vertex_cover`), decoded back into a truth assignment
+   (`reduction.decode_vertex_cover_to_assignment`), and **verified** against the original formula.
+
+SatyPy prints `s SATISFIABLE` only with a verified assignment and `s UNSATISFIABLE` only when steps 1–2 prove it. A
+decoded assignment that fails verification gives `s UNKNOWN`: the Khot–Regev gap needs very large parameters (the
+reference's repetition exponent alone is at least 10,240,000·log(1/δ)), and at the small parameters used here
+the Unique Game takes the same value under every assignment, so the Vertex Cover does not determine satisfiability and
+no unsatisfiability is ever inferred from it. Use `-l` to see each stage (instance sizes, cover fraction, ratio bound)
+in `app.log`.
+
+References: OpenAI Math Team, *The Unique Games Conjecture and Optimal Approximation Thresholds* (Result Family 102,
+[openai/math](https://github.com/openai/math/blob/main/lean/docs/102.md), 2026); S. Khot and O. Regev, *Vertex cover
+might be hard to approximate to within 2 − ε*, J. Comput. System Sci. 74 (2008) 335–349.
+
+## Experiments
+
+`experiments/run_benchmarks.py` runs SatyPy and a reference solver from python-sat on directories of DIMACS files and
+writes one CSV row per instance (expected answer from AIM file names, reference answer and time, deciding stage, sizes of
+the parity instance, Unique Game and Vertex Cover graph, Salvador's cover and time, peak memory):
+
+```bash
+python -m experiments.run_benchmarks -j 2 -s 300 -m 100 -o experiments/results.csv \
+    benchmarks/file-dimacs-aim benchmarks/sat23 benchmarks/sat24
+python -m experiments.run_benchmarks -r cadical195 -s 3600 -o prp.csv <directory with PRP_40_40.cnf.xz>
+```
+
+Results on the 72 AIM instances and the 12 SAT Competition 2023/2024 instances are in `experiments/results.csv` and
+`experiments/results_pass2.csv`. SatyPy never answered incorrectly and answered `UNKNOWN` on all 84 instances. Every
+Vertex Cover graph it built (147,312 to 311,112 vertices, up to 1.9 million edges) was covered optimally by Salvador with exactly 2/3 of the
+vertices: at the default parameters the graph is a disjoint union of copies of one 18-vertex graph with minimum cover 12,
+so it does not depend on whether the formula is satisfiable. MiniSat decided all AIM instances in at most 2 ms and 11
+of the 12 competition instances within 300 s; CaDiCaL proved `PRP_40_40` satisfiable in 35 s.
 
 ## Implementation
 

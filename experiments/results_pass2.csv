@@ -1,0 +1,5 @@
+set,instance,variables,clauses,expected,minisat,minisat_seconds,satypy,stage,residual_clauses,three_sat_clauses,equations,ug_vertices,ug_edges,vc_vertices,vc_edges,cover,cover_fraction,matching_lower_bound,ratio_upper_bound,salvador_seconds,satypy_seconds,verified,peak_mb
+aim,aim-50-2_0-yes1-2.cnf,50,100,SAT,SAT,0.0,UNKNOWN,vertex cover,100,101,1010,15902,20864,187776,1168384,125184,0.666667,83456,1.5,165.62,171.27,,2391
+aim,aim-50-2_0-yes1-4.cnf,50,100,SAT,SAT,0.0,UNKNOWN,vertex cover,100,101,1010,15770,20688,186192,1158528,124128,0.666667,82752,1.5,167.258,173.139,,2378
+aim,aim-100-1_6-yes1-1.cnf,100,160,SAT,SAT,0.0,UNKNOWN,vertex cover,160,161,1610,25864,33920,305280,1899520,203520,0.666667,135680,1.5,296.737,306.981,,3871
+aim,aim-100-1_6-no-1.cnf,100,160,UNSAT,UNSAT,0.0,UNKNOWN,vertex cover,160,160,1600,26347,34568,311112,1935808,207408,0.666667,138272,1.5,283.374,293.788,,3946

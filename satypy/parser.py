@@ -87,3 +87,12 @@ def read(filepath):
         raise FileNotFoundError("File not found: " + str(filepath))
     except UnicodeDecodeError:
         raise ValueError("Invalid file format. Use the -u flag to decompress files before processing: " + str(filepath))
+
+
+def write(formula, filepath):
+    """Writes a list of clauses as a DIMACS CNF file."""
+    max_variable = max((abs(lit) for clause in formula for lit in clause), default=0)
+    with open(filepath, 'w') as file:
+        file.write(f"p cnf {max_variable} {len(formula)}\n")
+        for clause in formula:
+            file.write(" ".join(map(str, clause)) + " 0\n")

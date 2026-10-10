@@ -1,5 +1,8 @@
-from . import reduction
-from . import solver
+import time
+from fractions import Fraction
+
+from . import reduction, utils
+
 
 def check(sat_instance, base, answer):
     variables = {abs(lit) for clause in sat_instance for lit in clause}
@@ -78,45 +81,86 @@ def _solve_two_sat(clauses):
     assignment = {v if comp[v] > comp[-v] else -v for v in variables}
     return True, assignment
 
-def solve(formula):
-    # empty formula
+def solve(formula, logger=None, p=Fraction(1, 3), stats=None, max_vc_clauses=None):
+    """Decide a CNF formula given as a list of clauses (lists of non-zero integers; variable IDs
+    need not be 1..n, contiguous or sorted).
+
+    1. reduce_sat_to_simplified_sat: unit propagation and pure literals (sound UNSAT on conflicts);
+    2. residual 2-SAT: solved exactly by _solve_two_sat (sound UNSAT);
+    3. otherwise reduce_sat_to_3sat, then the 3SAT -> Unique Games -> unweighted Vertex Cover
+       chain, a cover from Salvador, decoding of the cover into an assignment, and verification.
+
+    Returns (True, assignment) with a verified satisfying assignment (frozenset of literals),
+    (False, None) when stages 1-2 prove unsatisfiability, or (None, None) when the decoded
+    assignment does not satisfy the formula: no unsatisfiability is ever inferred from the
+    vertex cover, because the Khot-Regev gap does not hold at the parameters used here.
+    If `stats` is a dict it receives the deciding stage and the sizes of every instance built.
+    With max_vc_clauses set, the Vertex Cover stage is skipped (answer UNKNOWN) when the 3-SAT
+    formula has more clauses; the graph has about 1,900 vertices and 11,800 edges per clause.
+    """
+    stats = {} if stats is None else stats
+
+    def log(message):
+        if logger is not None:
+            utils.println(message, logger)
+
+    stats["stage"] = "empty"
     if not formula:
         return True, frozenset()
+    variables = sorted({abs(lit) for clause in formula for lit in clause})
+    max_variable = variables[-1]
+    log(f"Formula: {len(variables)} variables, {len(formula)} clauses")
 
-    variables = {abs(lit) for clause in formula for lit in clause}
-    max_variable = max(variables)
-
-    # simplification
+    stats.update(variables=len(variables), clauses=len(formula), stage="simplification")
     clauses, solution = reduction.reduce_sat_to_simplified_sat(formula)
     if clauses is None:
+        log("Simplification found a conflict")
         return False, None
+    log(f"Simplification: {len(clauses)} clauses left, {len(solution)} literals committed")
+    stats.update(residual_clauses=len(clauses), committed=len(solution))
     if not clauses:
         ok, assignment = check(formula, solution, set())
-        if ok:
-            return True, assignment
-        # should not happen, but fallback
-        return False, None
+        return (True, assignment) if ok else (None, None)
 
-    # 2-SAT residual
     if all(len(clause) <= 2 for clause in clauses):
+        log("Residual formula is 2-SAT")
+        stats["stage"] = "2-SAT"
         sat2, assignment = _solve_two_sat(clauses)
         if not sat2:
             return False, None
         ok, checked = check(formula, solution, set(assignment))
-        if ok:
-            return True, checked
-        # fallback
-        return False, None
+        return (True, checked) if ok else (None, None)
 
-    sets, k, W, bound = reduction.reduce_sat_to_exact_subset_sum(clauses, max_variable)
-    for certificate in solver.first_solution(sets, k, W, bound):
-        # first_solution reconstructs the reduction's mandatory-choice
-        # groups (one of {v, -v} per variable, two of three per clause
-        # triangle) and walks them with no backtracking, so every
-        # certificate it yields already decodes to a consistent partial
-        # assignment -- no conflicting-literal cleanup needed here.
-        assignment = {v for v, _ in certificate if abs(v) <= max_variable}
-        ok, full = check(formula, solution, assignment)
-        if ok:
-            return True, full
-    return False, None
+    stats["stage"] = "vertex cover"
+    three_sat, three_max = reduction.reduce_sat_to_3sat(clauses, max_variable)
+    stats["three_sat_clauses"] = len(three_sat)
+    if max_vc_clauses is not None and len(three_sat) > max_vc_clauses:
+        stats["stage"] = "vertex cover skipped (size)"
+        log(f"Vertex Cover stage skipped: {len(three_sat)} 3-SAT clauses exceed the limit {max_vc_clauses}")
+        return None, None
+    log(f"3-SAT: {len(three_sat)} clauses, largest variable {three_max}")
+    graph, info = reduction.reduce_3sat_to_unweighted_vertex_cover(three_sat, three_max, p=p)
+    log(f"Parity instance: {info['equations']} equations; Unique Game: "
+        f"{len(info['unique_game'].left) + len(info['unique_game'].right)} vertices, "
+        f"{len(info['unique_game'].edges)} edges over an alphabet of size {info['unique_game'].alphabet_size}")
+    log(f"Vertex Cover instance: {graph.number_of_nodes()} vertices, {graph.number_of_edges()} edges "
+        f"(satisfiable formulas admit covers of fraction {info['yes_cover_fraction']}; "
+        f"threshold ratio {info['threshold_ratio']})")
+
+    stats.update(equations=info["equations"], ug_vertices=len(info["unique_game"].left) + len(info["unique_game"].right),
+                 ug_edges=len(info["unique_game"].edges), vc_vertices=graph.number_of_nodes(),
+                 vc_edges=graph.number_of_edges())
+    started = time.time()
+    cover, lower_bound = reduction.approximate_vertex_cover(graph)
+    stats.update(salvador_seconds=time.time() - started, cover=len(cover), matching_lower_bound=lower_bound)
+    log(f"Salvador cover: {len(cover)} vertices, fraction {Fraction(len(cover), graph.number_of_nodes())}, "
+        f"ratio <= {Fraction(len(cover), lower_bound) if lower_bound else 1}")
+
+    original = [v for v in variables if v not in {abs(lit) for lit in solution}]
+    decoded = reduction.decode_vertex_cover_to_assignment(info, cover, original)
+    ok, full = check(formula, solution, decoded)
+    if ok:
+        log("Decoded assignment verified")
+        return True, full
+    log("Decoded assignment does not satisfy the formula")
+    return None, None
