@@ -1,5 +1,6 @@
 import time
-from fractions import Fraction
+
+from siriaisa.algorithm import find_independent_dominating_set
 
 from . import reduction, utils
 
@@ -27,14 +28,6 @@ def check(sat_instance, base, answer, report=None):
                                   filled=len(rest))
                 return True, frozenset(completed)
     return False, None
-
-
-def _trivially_satisfied(formula):
-    """Whether the all-True or the all-False assignment satisfies the formula."""
-    for sign in (1, -1):
-        if all(any(lit * sign > 0 for lit in clause) for clause in formula):
-            return "all True" if sign == 1 else "all False"
-    return None
 
 
 def _solve_two_sat(clauses):
@@ -97,22 +90,17 @@ def _solve_two_sat(clauses):
     assignment = {v if comp[v] > comp[-v] else -v for v in variables}
     return True, assignment
 
-def solve(formula, logger=None, p=Fraction(1, 3), stats=None, max_vc_clauses=None, max_exact_clauses=100000,
-          gap_no_bound=None):
+def solve(formula, logger=None, stats=None):
     """Decide a CNF formula; see _solve. This wrapper is the final certification gate: a
     SATISFIABLE answer is returned only if the assignment is consistent (no variable with both
     signs) and contains a literal of every clause of the original formula; otherwise the
-    answer is downgraded to UNKNOWN. UNSATISFIABLE can only come from the exact stages of
-    _solve (an empty clause after unit propagation, or an unsatisfiable residual 2-SAT formula).
-    The only SATISFIABLE answer without an assignment comes from the gap rule of the
-    OpenAI/Khot-Regev chain, which runs only with a proved soundness bound (gap_no_bound) and
-    parameters meeting the reference (reduction.reference_parameters_met)."""
+    answer is downgraded to UNKNOWN."""
     stats = {} if stats is None else stats
     stats["comments"] = []
-    satisfiability, answer = _solve(formula, logger, p, stats, max_vc_clauses, max_exact_clauses, gap_no_bound)
-    if satisfiability is True and answer is None:
-        return (True, None) if stats.get("stage") == "gap rule" else (None, None)
+    satisfiability, answer = _solve(formula, logger, stats)
     if satisfiability is True:
+        if answer is None:
+            return None, None
         literals = set(answer)
         if any(-lit in literals for lit in literals) or not utils.satisfies(formula, literals):
             if logger is not None:
@@ -121,29 +109,26 @@ def solve(formula, logger=None, p=Fraction(1, 3), stats=None, max_vc_clauses=Non
     return satisfiability, answer
 
 
-def _solve(formula, logger=None, p=Fraction(1, 3), stats=None, max_vc_clauses=None, max_exact_clauses=100000,
-           gap_no_bound=None):
+def _solve(formula, logger=None, stats=None):
     """Decide a CNF formula given as a list of clauses (lists of non-zero integers; variable IDs
     need not be 1..n, contiguous or sorted).
 
-    1. reduce_sat_to_simplified_sat: unit propagation and pure literals (sound UNSAT on conflicts);
-    2. residual 2-SAT: solved exactly by _solve_two_sat (sound UNSAT);
-    3. otherwise reduce_sat_to_3sat and both Vertex Cover stages, each with Salvador:
-       - the OpenAI/Khot-Regev chain 3SAT -> Unique Games -> unweighted Vertex Cover (gap rule, or
-         decoding of the cover into an assignment and verification), which has priority;
-       - Karp's exact reduction (Garey-Johnson graph, 2n + 3m vertices): if Salvador's cover has
-         exactly n + 2m vertices it is optimal and decodes into a satisfying assignment.
-       The answer is the chain's when it decides the formula, otherwise Karp's; comment lines in
-       stats["comments"] report what each stage found.
+    1. reduce_sat_to_simplified_sat: unit propagation and pure literals (UNSAT on conflicts);
+    2. residual 2-SAT: solved exactly by _solve_two_sat;
+    3. otherwise reduce_sat_to_mids (the residual formula with N variables and m clauses -> a graph
+       with n vertices: an edge {v, -v} per variable and bound copies of a vertex per clause, adjacent
+       to its literals, with bound + N > 2 * sqrt(n) * N) and Siriaisa's independent dominating set S:
+       - |S| < bound: S has no clause vertex, so it is one endpoint of each edge {v, -v} and it is
+         decoded into an assignment, which is verified (SATISFIABLE);
+       - |S| > 2 * sqrt(n) * N: UNSATISFIABLE under the conjecture that Siriaisa's approximation
+         ratio is at most 2 * sqrt(n) (a satisfiable formula has a MIDS of N vertices, an
+         unsatisfiable one has none smaller than bound + N);
+       - otherwise UNKNOWN.
+       Comment lines in stats["comments"] report what the stage found.
 
     Returns (True, assignment) with a verified satisfying assignment (frozenset of literals),
-    (False, None) when stages 1-2 prove unsatisfiability, or (None, None) when the decoded
-    assignment does not satisfy the formula: no unsatisfiability is ever inferred from the
-    vertex cover, because the Khot-Regev gap does not hold at the parameters used here.
-    If `stats` is a dict it receives the deciding stage and the sizes of every instance built.
-    With max_exact_clauses / max_vc_clauses set, stage 3 / stage 4 is skipped when the 3-SAT
-    formula has more clauses (stage 3 builds 3 vertices per clause, stage 4 about 1,900 vertices
-    and 11,800 edges per clause); max_vc_clauses = 0 disables stage 4.
+    (False, None), or (None, None).
+    If `stats` is a dict it receives the deciding stage and the sizes of the instances built.
     """
     stats = {} if stats is None else stats
     stats.setdefault("comments", [])
@@ -190,102 +175,41 @@ def _solve(formula, logger=None, p=Fraction(1, 3), stats=None, max_vc_clauses=No
             stats["comments"].append("c decided by: 2-SAT (implication graph)")
         return (True, checked) if ok else (None, None)
 
-    three_sat, three_max = reduction.reduce_sat_to_3sat(clauses, max_variable)
-    stats["three_sat_clauses"] = len(three_sat)
-    log(f"3-SAT: {len(three_sat)} clauses, largest variable {three_max}")
+    graph, num_variables, bound = reduction.reduce_sat_to_mids(clauses, max_variable)
+    log(f"MIDS instance: {graph.number_of_nodes()} vertices, {graph.number_of_edges()} edges, "
+        f"{num_variables} variables, {bound} copies of each clause vertex")
+    stats.update(mids_vertices=graph.number_of_nodes(), mids_edges=graph.number_of_edges(),
+                 mids_target=num_variables, mids_bound=bound)
+    started = time.time()
+    independent_dominating_set = find_independent_dominating_set(graph)
+    size = len(independent_dominating_set)
+    stats.update(siriaisa_seconds=time.time() - started, mids_size=size)
+    log(f"Siriaisa independent dominating set: {size} vertices (N = {num_variables}, bound = {bound})")
 
-    # Both Vertex Cover stages run; the OpenAI/Khot-Regev chain has priority in the answer.
-    chain = _chain_stage(formula, solution, variables, three_sat, three_max, p, stats, log, max_vc_clauses, gap_no_bound)
-    karp = _karp_stage(formula, solution, max_variable, three_sat, stats, log, max_exact_clauses)
-    if chain is not None:
-        stats["stage"] = chain[0]
-        stats["comments"].append(chain[2])
-        if karp is not None:
-            stats["comments"].append("c also decided by: Karp graph (Salvador's cover is optimal)")
-        return True, chain[1]
-    if karp is not None:
-        stats["stage"] = "exact vertex cover"
-        stats["comments"].append(karp[1])
-        return True, karp[0]
-    stats["stage"] = "vertex cover (undecided)"
+    if size < bound:
+        certificate = reduction.decode_mids(independent_dominating_set, max_variable)
+        certificate -= {-x for x in list(certificate)}
+        ok, full = check(formula, solution, certificate)
+        if ok:
+            log("MIDS: decoded assignment verified")
+            stats["stage"] = "mids"
+            stats["comments"].append(f"c decided by: MIDS graph (Siriaisa's set has {size} vertices, N = {num_variables})")
+            return True, full
+        log("MIDS: the decoded assignment does not satisfy the formula")
+        stats["stage"] = "mids (undecided)"
+        stats["comments"].append(f"c MIDS graph: {graph.number_of_nodes()} vertices; Siriaisa's set: {size} vertices; "
+                                 f"the decoded assignment does not satisfy the formula")
+        return None, None
+
+    # Conjecture: Siriaisa's approximation ratio is at most 2 * sqrt(n); |S| > 2 * sqrt(n) * N <=> |S|^2 > 4 * N^2 * n.
+    n = graph.number_of_nodes()
+    if size * size > 4 * num_variables ** 2 * n:
+        log("MIDS: Siriaisa's set exceeds 2 * sqrt(n) * N")
+        stats["stage"] = "mids (conjecture)"
+        stats["comments"].append(f"c decided by: MIDS graph under the 2*sqrt(n) conjecture (Siriaisa's set has {size} "
+                                 f"vertices > 2*sqrt(n)*N, n = {n}, N = {num_variables})")
+        return False, None
+    stats["stage"] = "mids (undecided)"
+    stats["comments"].append(f"c MIDS graph: {n} vertices; Siriaisa's set: {size} vertices, "
+                             f"not above 2*sqrt(n)*N (N = {num_variables})")
     return None, None
-
-
-def _chain_stage(formula, solution, variables, three_sat, three_max, p, stats, log, max_vc_clauses, gap_no_bound):
-    """The OpenAI/Khot-Regev chain with Salvador. Returns (stage, answer, decided-by comment) when it
-    decides the formula (gap rule: answer None; decoding: a verified assignment), else None."""
-    if max_vc_clauses == 0:
-        return None
-    if max_vc_clauses is not None and len(three_sat) > max_vc_clauses:
-        stats["comments"].append(f"c OpenAI/Khot-Regev chain: skipped, {len(three_sat)} 3-SAT clauses exceed the limit "
-                                 f"{max_vc_clauses} (about 1,900 vertices per clause)")
-        log(f"Chain skipped: {len(three_sat)} 3-SAT clauses exceed the limit {max_vc_clauses}")
-        return None
-    graph, info = reduction.reduce_3sat_to_unweighted_vertex_cover(three_sat, three_max, p=p)
-    log(f"Parity instance: {info['equations']} equations; Unique Game: "
-        f"{len(info['unique_game'].left) + len(info['unique_game'].right)} vertices, "
-        f"{len(info['unique_game'].edges)} edges over an alphabet of size {info['unique_game'].alphabet_size}")
-    log(f"Vertex Cover instance: {graph.number_of_nodes()} vertices, {graph.number_of_edges()} edges "
-        f"(satisfiable formulas admit covers of fraction {info['yes_cover_fraction']}; "
-        f"threshold ratio {info['threshold_ratio']})")
-    stats.update(equations=info["equations"], ug_vertices=len(info["unique_game"].left) + len(info["unique_game"].right),
-                 ug_edges=len(info["unique_game"].edges), vc_vertices=graph.number_of_nodes(),
-                 vc_edges=graph.number_of_edges())
-    started = time.time()
-    cover, lower_bound = reduction.approximate_vertex_cover(graph)
-    stats.update(salvador_seconds=time.time() - started, cover=len(cover), matching_lower_bound=lower_bound)
-    fraction = Fraction(len(cover), graph.number_of_nodes())
-    log(f"Salvador cover: {len(cover)} vertices, fraction {fraction}, "
-        f"ratio <= {Fraction(len(cover), lower_bound) if lower_bound else 1}")
-
-    if gap_no_bound is not None and reduction.gap_rule(info, len(cover), gap_no_bound):
-        log("Gap rule: the cover is below the proved bound for unsatisfiable formulas")
-        return "gap rule", None, "c decided by: OpenAI/Khot-Regev gap rule (no assignment)"
-    if not reduction.reference_parameters_met(info["parameters"], info["gadget"]):
-        stats["comments"].append(
-            f"c OpenAI/Khot-Regev chain: {graph.number_of_nodes()} vertices; Salvador cover: {len(cover)} vertices "
-            f"(fraction {fraction}; satisfiable formulas admit {info['yes_cover_fraction']}); gap rule inactive: "
-            f"parameters t={info['parameters']['t']}, h={info['parameters']['h']}, rank-one gadget are below the "
-            f"reference's (t >= {reduction.REFERENCE_MIN_REPETITION:,}, h >= 2, latent gadget)")
-
-    original = [v for v in variables if v not in {abs(lit) for lit in solution}]
-    decoded, undecided = reduction.decode_vertex_cover_to_assignment(info, cover, original, return_undecided=True)
-    report = {}
-    ok, full = check(formula, solution, decoded, report)
-    if not ok:
-        log("Chain: the decoded assignment does not satisfy the formula")
-        return None
-    log("Chain: decoded assignment verified")
-    trivial = _trivially_satisfied(formula)
-    stats.update(chain_decided=len(original) - len(undecided), chain_variables=len(original),
-                 chain_candidate=report.get("candidate"), chain_trivial=trivial)
-    comment = (f"c decided by: OpenAI/Khot-Regev chain (decoded assignment; {len(original) - len(undecided)} of "
-               f"{len(original)} variables decided by the cover, the rest set to False; verifier accepted "
-               f"{report.get('candidate')})" + (f"; note: {trivial} also satisfies the formula" if trivial else ""))
-    return "unique games vertex cover", full, comment
-
-
-def _karp_stage(formula, solution, max_variable, three_sat, stats, log, max_exact_clauses):
-    """Karp's exact reduction with Salvador. Returns (verified assignment, decided-by comment) when
-    Salvador's cover is optimal (n + 2m vertices), else None."""
-    if max_exact_clauses is not None and len(three_sat) > max_exact_clauses:
-        return None
-    exact_graph, target = reduction.reduce_3sat_to_exact_vertex_cover(three_sat)
-    log(f"Exact Vertex Cover instance: {exact_graph.number_of_nodes()} vertices, {exact_graph.number_of_edges()} edges, "
-        f"satisfiable iff a cover of {target} vertices exists")
-    started = time.time()
-    exact_cover, _ = reduction.approximate_vertex_cover(exact_graph)
-    stats.update(exact_vertices=exact_graph.number_of_nodes(), exact_edges=exact_graph.number_of_edges(),
-                 exact_target=target, exact_cover=len(exact_cover), exact_seconds=time.time() - started)
-    log(f"Salvador cover: {len(exact_cover)} vertices ({len(exact_cover) - target} above n + 2m)")
-    if len(exact_cover) > target:
-        stats["comments"].append(
-            f"c Karp graph: {exact_graph.number_of_nodes()} vertices; Salvador cover: {len(exact_cover)} vertices, "
-            f"{len(exact_cover) - target} above the bound n + 2m = {target} (satisfiability not determined)")
-        return None
-    decoded = reduction.decode_exact_vertex_cover(exact_cover)
-    ok, full = check(formula, solution, {lit for lit in decoded if abs(lit) <= max_variable})
-    if not ok:
-        return None
-    log("Karp: decoded assignment verified")
-    return full, f"c decided by: Karp graph (Salvador's cover is optimal, {target} vertices)"
