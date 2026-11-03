@@ -32,14 +32,16 @@
   <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js"></script>
 </head>
 <body>
-<h1>SatyPy: SAT Solver through Minimum Independent Dominating Set</h1>
-<p><img alt="SatyPy: SAT Solver" src="satypy.png" /></p>
+<h1 id="satypy-sat-solver-through-minimum-independent-dominating-set">SatyPy: SAT Solver through Minimum Independent Dominating Set</h1>
+<p><img src="satypy.png" alt="SatyPy: SAT Solver" /></p>
 <p>This work builds upon <a href="https://github.com/frankvegadelgado/satypy">SatyPy: SAT Solver</a>.</p>
 <p>SatyPy decides Boolean formulas in CNF by reducing them to <strong>Minimum Independent Dominating Set</strong> (MIDS) and solving the MIDS instance with
 <a href="https://pypi.org/project/siriaisa/">Siriaisa</a> 0.0.8. The decision rule is based on the conjecture that Siriaisa has an
-approximation ratio of <code>2√n</code>. Every <code>SATISFIABLE</code> comes with a checked assignment; <code>UNSATISFIABLE</code> comes from an exact
-stage or from the conjecture; everything else is <code>UNKNOWN</code>.</p>
-<h1>Boolean Satisfiability (SAT) Problem</h1>
+approximation ratio of <code>2√n</code>. Every <code>SATISFIABLE</code> comes with a checked assignment, and every unsatisfiable formula is
+answered <code>UNSATISFIABLE</code> (both are proved, without the conjecture). The only answer that can be wrong is
+<code>UNSATISFIABLE</code> on a satisfiable formula, and that would be a counterexample to the conjecture (see
+<a href="#what-is-proved-and-what-rests-on-the-conjecture">What Is Proved and What Rests on the Conjecture</a>).</p>
+<h1 id="boolean-satisfiability-sat-problem">Boolean Satisfiability (SAT) Problem</h1>
 <p><strong>Problem:</strong> Given a Boolean formula in Conjunctive Normal Form (CNF), is there a truth assignment that makes the formula evaluate to true?</p>
 <p><strong>Background:</strong></p>
 <p>The Boolean Satisfiability Problem (SAT) is a fundamental problem in computer science. It is known to be NP-complete, which means that any problem whose solution can be verified in polynomial time can be reduced to SAT. This implies that SAT is likely to be computationally difficult, although there is no proof of this.</p>
@@ -69,21 +71,21 @@ stage or from the conjecture; everything else is <code>UNKNOWN</code>.</p>
 <ul>
 <li>
 <p><strong>Header (p cnf 4 2):</strong></p>
-</li>
-<li>
-<p><code>p cnf</code> indicates it's a CNF formula in DIMACS format.</p>
-</li>
+<ul>
+<li><code>p cnf</code> indicates it's a CNF formula in DIMACS format.</li>
 <li><code>4</code> specifies the number of variables in the formula ($x_1$, $x_2$, $x_3$, and $x_4$ in this case).</li>
-<li>
-<p><code>2</code> specifies the number of clauses (disjunctions of literals) in the formula.</p>
+<li><code>2</code> specifies the number of clauses (disjunctions of literals) in the formula.</li>
+</ul>
 </li>
 <li>
 <p><strong>Clauses (1 -3 -2 0 and 3 2 4 0):</strong></p>
-</li>
+<ul>
 <li>Each line represents a clause.</li>
 <li>A positive integer represents a variable (e.g., <code>1</code> represents variable $x_1$).</li>
 <li>A negative integer represents the negation of a variable (e.g., <code>-3</code> represents $\neg x_3$).</li>
 <li><code>0</code> at the end of the line indicates the end of the clause.</li>
+</ul>
+</li>
 </ul>
 <p><strong>Explanation of the clauses:</strong></p>
 <ul>
@@ -91,7 +93,7 @@ stage or from the conjecture; everything else is <code>UNKNOWN</code>.</p>
 <li><code>3 2 4 0</code>: This clause translates to $(x_3 \vee x_2 \vee x_4)$, which means at least one of $x_3$, $x_2$, or $x_3$ must be true for the clause to be true.</li>
 </ul>
 <p><strong>In essence, the formula represented by this <code>.cnf</code> file is asking if there exists an assignment of truth values (true or false) to the variables $x_1$, $x_2$, $x_3$, and $x_4$ that makes both clauses true simultaneously.</strong></p>
-<h2>Installation and Setup</h2>
+<h2 id="installation-and-setup">Installation and Setup</h2>
 <p><strong>1. Install Python:</strong></p>
 <ul>
 <li>Ensure you have Python 3.12 or a later version installed on your system. You can download and install it from the official Python website: https://www.python.org/downloads/</li>
@@ -103,7 +105,7 @@ stage or from the conjecture; everything else is <code>UNKNOWN</code>.</p>
 </ul>
 <pre><code class="language-bash">pip install satypy
 </code></pre>
-<h2>Running the SAT Solver with SatyPy</h2>
+<h2 id="running-the-sat-solver-with-satypy">Running the SAT Solver with SatyPy</h2>
 <p>Download the repository (it contains sample formulas):</p>
 <pre><code class="language-bash">git clone https://github.com/frankvegadelgado/satypy.git
 cd satypy
@@ -112,36 +114,39 @@ cd satypy
 <pre><code class="language-bash">saty -i benchmarks/test_formulas/formula2.cnf
 </code></pre>
 <p>Variable identifiers may be any positive integers: they need not be <code>1..n</code>, contiguous, or sorted.</p>
-<h2>Output Interpretation</h2>
+<h2 id="output-interpretation">Output Interpretation</h2>
 <p>SatyPy prints its answer in the DIMACS output format.</p>
 <ul>
-<li><strong>Satisfiable, with an assignment:</strong></li>
-</ul>
-<p><code>s SATISFIABLE
-  v 1 2 -3 0</code></p>
+<li>
+<p><strong>Satisfiable, with an assignment:</strong></p>
+<pre><code>s SATISFIABLE
+v 1 2 -3 0
+</code></pre>
 <p>Positive numbers are variables assigned True, negative numbers variables assigned False, and <code>0</code> ends the line. The
-  assignment has been checked against every clause of the input.</p>
-<ul>
+assignment has been checked against every clause of the input.</p>
+</li>
 <li>
 <p><strong>Unsatisfiable:</strong> <code>s UNSATISFIABLE</code>, when an exact stage proves it or when Siriaisa's independent dominating set
-  has more than <code>2√n · N</code> vertices (<code>2√n</code> conjecture, see below).</p>
+has more than <code>2√n · N</code> vertices. Every unsatisfiable formula receives this answer; on a satisfiable formula it can
+only appear if Siriaisa's ratio exceeds <code>2√n</code> (<code>2√n</code> conjecture, see below).</p>
 </li>
 <li>
 <p><strong>Comment lines:</strong> before the answer, SatyPy prints DIMACS comment lines (<code>c ...</code>) that report what Siriaisa found
-  on the MIDS graph and, when the formula is decided, a line <code>c decided by: ...</code> naming the stage that decided it
-  (empty clause, simplification, 2-SAT, MIDS graph, or MIDS graph under the <code>2*sqrt(n)</code> conjecture).</p>
+on the MIDS graph and, when the formula is decided, a line <code>c decided by: ...</code> naming the stage that decided it
+(empty clause, simplification, 2-SAT, MIDS graph, or MIDS graph under the <code>2*sqrt(n)</code> conjecture).</p>
 </li>
 <li>
-<p><strong>Undecided:</strong> <code>s UNKNOWN</code>, preceded by the comment lines.</p>
+<p><strong>Undecided:</strong> <code>s UNKNOWN</code>, preceded by the comment lines. It is printed only when a certification check rejects an
+assignment, which the proofs below show cannot happen at the MIDS stage.</p>
 </li>
 </ul>
-<h2>Examples</h2>
+<h2 id="examples">Examples</h2>
 <p>The directory <code>benchmarks/test_formulas</code> contains four small formulas.</p>
 <pre><code>saty -i benchmarks/test_formulas/formula2.cnf
 saty -i benchmarks/test_formulas/formula3.cnf
 batch_saty -i benchmarks/test_formulas -a -b -c
 </code></pre>
-<h2>Command-Line Options</h2>
+<h2 id="command-line-options">Command-Line Options</h2>
 <p>To view the available command-line options for the <code>saty</code> command, use the following command in your terminal or command prompt:</p>
 <pre><code class="language-bash">saty -h
 </code></pre>
@@ -226,48 +231,103 @@ options:
 <p>Example:</p>
 <pre><code>test_saty -d 6 -m 12 -n 8 -g -r 7 -a -b -c
 </code></pre>
-<h2>How SatyPy Solves a Formula</h2>
+<h2 id="how-satypy-solves-a-formula">How SatyPy Solves a Formula</h2>
 <p>Variable IDs may be any positive integers (not necessarily <code>1..n</code>, contiguous, or sorted).</p>
 <ol>
 <li><strong>Empty clause</strong>: a formula containing the empty clause (a lone <code>0</code> in DIMACS) is unsatisfiable.</li>
 <li><strong>Simplification</strong> (<code>reduction.reduce_sat_to_simplified_sat</code>): unit propagation and pure literals. A conflict proves the
-   formula unsatisfiable.</li>
+formula unsatisfiable.</li>
 <li><strong>2-SAT</strong>: if every remaining clause has at most two literals, the formula is decided exactly by the
-   strongly-connected-components algorithm (<code>algorithm._solve_two_sat</code>).</li>
+strongly-connected-components algorithm (<code>algorithm._solve_two_sat</code>).</li>
 <li><strong>Reduction to MIDS</strong> (<code>reduction.reduce_sat_to_mids</code>): otherwise, with <code>N</code> the number of variables of the residual
-   formula and <code>m</code> its number of clauses, the graph has an edge <code>{v, −v}</code> for each variable <code>v</code> and, for each clause,
-   <code>bound</code> vertices adjacent to the literals of the clause (clauses of any width), where
-   <code>bound = 2mN² + ⌊√(4m²N⁴ + 8N³ − 4mN³)⌋ + 1 − N</code> (<code>reduction.mids_bound</code>) is the least integer with
-   <code>bound + N &gt; 2√n · N</code> for the number of vertices <code>n = 2N + m · bound</code>. The formula is satisfiable if and only if
-   the graph has an independent dominating set of <code>N</code> vertices (one endpoint of each edge <code>{v, −v}</code>); otherwise every
-   independent dominating set contains all <code>bound</code> copies of some clause vertex. With the copies of exactly one
-   clause it also contains an endpoint of each edge <code>{v, −v}</code> (a clause holds at most one of <code>v</code>, <code>−v</code>), so it has
-   <code>bound + N</code> vertices; with the copies of two or more clauses it has at least <code>2 · bound ≥ bound + N</code> vertices.
-   So it has more than <code>2√n · N</code> vertices.</li>
-<li><strong>Siriaisa</strong> 0.0.8 (<code>siriaisa.algorithm.find_independent_dominating_set</code>) computes an independent dominating set <code>S</code>:</li>
+formula and <code>m</code> its number of clauses, the graph has an edge <code>{v, −v}</code> for each variable <code>v</code> and, for each clause,
+<code>bound</code> vertices adjacent to the literals of the clause (clauses of any width), where
+<code>bound = 2mN² + ⌊√(4m²N⁴ + 8N³ − 4mN³)⌋ + 1 − N</code> (<code>reduction.mids_bound</code>) is the least integer with
+<code>bound + N &gt; 2√n · N</code> for the number of vertices <code>n = 2N + m · bound</code>. The formula is satisfiable if and only if
+the graph has an independent dominating set of <code>N</code> vertices (one endpoint of each edge <code>{v, −v}</code>); otherwise every
+independent dominating set contains all <code>bound</code> copies of some clause vertex. With the copies of exactly one
+clause it also contains an endpoint of each edge <code>{v, −v}</code> (a clause holds at most one of <code>v</code>, <code>−v</code>), so it has
+<code>bound + N</code> vertices; with the copies of two or more clauses it has at least <code>2 · bound ≥ bound + N</code> vertices.
+So it has more than <code>2√n · N</code> vertices.</li>
+<li><strong>Siriaisa</strong> 0.0.8 (<code>siriaisa.algorithm.find_independent_dominating_set</code>) computes an independent dominating set <code>S</code>:
+<ul>
 <li>if <code>|S| &lt; bound</code>, <code>S</code> contains no clause vertex, and <code>reduction.decode_mids</code> reads an assignment from it, which is
-     verified against the input (<code>s SATISFIABLE</code>);</li>
-<li>if <code>|S| &gt; 2√n · N</code>, the formula is reported unsatisfiable under the conjecture that Siriaisa's approximation
-     ratio is at most <code>2√n</code> (<code>s UNSATISFIABLE</code>);</li>
-<li>otherwise <code>s UNKNOWN</code>.</li>
+verified against the input (<code>s SATISFIABLE</code>);</li>
+<li>if <code>|S| &gt; 2√n · N</code>, the formula is reported unsatisfiable (<code>s UNSATISFIABLE</code>); this is correct for every
+unsatisfiable formula, and for satisfiable formulas it rests on the conjecture that Siriaisa's approximation
+ratio is at most <code>2√n</code>;</li>
+<li>the remaining case (<code>bound ≤ |S| ≤ 2√n · N</code>) never occurs: an independent dominating set has either <code>N</code> or at
+least <code>bound + N &gt; 2√n · N</code> vertices.</li>
+</ul>
+</li>
 </ol>
 <p><code>s SATISFIABLE</code> is printed only after the assignment has been checked to be consistent and to contain a literal of
 every clause of the input (a final certification gate in <code>algorithm.solve</code>). <code>s UNSATISFIABLE</code> comes from steps 1–3 or
-from the conjecture in step 5. Use <code>-l</code> to see each stage in <code>app.log</code>.</p>
-<h2>References</h2>
+from step 5. Use <code>-l</code> to see each stage in <code>app.log</code>.</p>
+<h2 id="what-is-proved-and-what-rests-on-the-conjecture">What Is Proved and What Rests on the Conjecture</h2>
+<p>Write <code>N</code> and <code>m</code> for the variables and clauses of the residual formula, <code>bound</code> for the copies per clause vertex,
+<code>n = 2N + m · bound</code> for the vertices of the MIDS graph <code>G</code>, and <code>i(G)</code> for its minimum independent dominating set size.</p>
+<p><strong>Proved, without any conjecture.</strong></p>
+<ul>
+<li><em>Structure of the graph.</em> An independent dominating set with no clause vertex holds exactly one of <code>v</code>, <code>−v</code> for every
+variable and is a satisfying assignment. One that holds a copy of a clause vertex holds all <code>bound</code> copies (they have
+the same neighbours), and then it has at least <code>bound + N</code> vertices. So <code>i(G) = N</code> if the formula is satisfiable,
+<code>i(G) ≥ bound + N</code> otherwise, and no independent dominating set has a size strictly between <code>N</code> and <code>bound + N</code>.
+The value <code>bound + N</code> is attained when some assignment falsifies exactly one clause (all 8 sign patterns of 3
+variables, <code>formula3.cnf</code>, is an example).</li>
+<li><em>The bound.</em> <code>reduction.mids_bound</code> returns the least integer with <code>bound + N &gt; 2√n · N</code>; it satisfies
+<code>N ≤ bound ≤ 4mN² + 1</code>, so the graph has at most <code>2N + 4m²N² + m</code> vertices.</li>
+<li><em>The answers.</em> If <code>|S| &lt; bound</code>, <code>S</code> decodes to a satisfying assignment that passes the check. Otherwise
+<code>|S| ≥ bound + N &gt; 2√n · N</code>, so the answer is <code>UNSATISFIABLE</code>: the MIDS stage never answers <code>UNKNOWN</code>, and every
+unsatisfiable formula is answered <code>UNSATISFIABLE</code>.</li>
+<li><em>The only possible error.</em> On a satisfiable formula the answer is <code>UNSATISFIABLE</code> exactly when Siriaisa's set
+contains a clause vertex, and then its ratio is at least <code>(bound + N)/N &gt; 2√n</code>.</li>
+</ul>
+<p><strong>Resting on the conjecture.</strong> If Siriaisa's ratio is at most <code>2√n</code> on these graphs, a satisfiable formula gives
+<code>|S| ≤ 2√n · N &lt; bound + N</code>, so <code>S</code> has no clause vertex and SatyPy answers <code>SATISFIABLE</code> with a checked assignment.
+Then SatyPy would decide every CNF formula correctly in polynomial time, which would imply P = NP; this is why the
+<code>2√n</code> ratio is stated as a conjecture.</p>
+<p><strong>What Siriaisa's proved bound does not give.</strong> Siriaisa proves that its degree-splitting strategy gives at most
+<code>⌊√n⌋ · (i(G) + s(G))</code> vertices, where <code>s(G)</code> is the sum of <code>⌈deg(v)/k⌉ − 1</code> over the vertices of degree larger than
+<code>k = ⌊√n⌋</code>, and that the output satisfies the same bound when the decoded set is independent. On the MIDS graph a
+literal that occurs <code>occ</code> times has degree <code>1 + bound · occ</code> and <code>bound/k ≈ 2N</code>, so <code>s(G) ≈ 2N · L</code>, where <code>L</code> is the
+number of literal occurrences of the residual formula (pure literals are removed in step 2, so <code>L ≥ 2N</code> and
+<code>s(G) &gt; 4N² − 2N²/k − 2N</code>). The proved bound therefore lies far above the decision threshold <code>2√n · N</code>: on
+<code>formula2.cnf</code> (<code>N = 3</code>, <code>m = 7</code>, <code>n = 1,735</code>), <code>s(G) = 126</code> and the bound is <code>⌊√n⌋ · (N + s(G)) = 5,289</code>, against a
+threshold of <code>249.9</code>. Converting the formula to 3CNF first does not change this. More generally, every graph satisfies</p>
+<pre><code>⌊√n⌋ · (i(G) + s(G)) ≥ n − i(G)
+</code></pre>
+<p>(a minimum independent dominating set <code>D</code> dominates the other <code>n − i(G)</code> vertices, so the degrees of <code>D</code> add up to at
+least <code>n − i(G)</code>, and each <code>d</code> in <code>D</code> contributes at least <code>deg(d)/k − 1</code> to <code>s(G)</code>). So for any reduction with
+<code>i = a</code> on satisfiable and <code>i ≥ b</code> on unsatisfiable formulas, the proved bound separates them only if <code>b &gt; n − a</code>,
+which forces the unsatisfiable graphs to have maximum degree below <code>a</code> and fewer than <code>a²</code> edges, while the satisfiable
+ones have at least <code>n − a</code> edges.</p>
+<p>The correct <code>SATISFIABLE</code> answers therefore come from Siriaisa's actual output, not from this bound: in
+<code>car/small_formulas.py</code> (187 formulas, 117 decided on the MIDS graph), Siriaisa returned <code>|S| = N</code> on all 114
+satisfiable instances, and every answer agreed with exhaustive search.</p>
+<p><strong>Checking on small formulas.</strong> <code>car/small_formulas.py</code> decides very small random formulas and the small DIMACS files of
+<code>benchmarks</code> with SatyPy and with exhaustive search, compares the answers, and reports, for the formulas decided on the
+MIDS graph, <code>|S|</code> against <code>2√n · N</code>, whether <code>|S| ≥ bound + N</code> on unsatisfiable formulas, and <code>s(G)</code>. It runs from the
+repository root with or without SatyPy installed:</p>
+<pre><code class="language-bash">python car/small_formulas.py
+python car/small_formulas.py --variables 3 6 --clauses 16 --repeat 10 --seed 7
+</code></pre>
+<h2 id="references">References</h2>
 <ul>
 <li>R. M. Karp, <em>Reducibility among combinatorial problems</em>, 1972; M. R. Garey and D. S. Johnson, <em>Computers and
-  Intractability</em>, Freeman, 1979.</li>
+Intractability</em>, Freeman, 1979.</li>
 <li>B. Aspvall, M. F. Plass and R. E. Tarjan, <em>A linear-time algorithm for testing the truth of certain quantified
-  Boolean formulas</em>, Inform. Process. Lett. 8 (1979) 121–123.</li>
-<li>F. Vega, <a href="https://pypi.org/project/siriaisa/">Siriaisa 0.0.8</a>.</li>
+Boolean formulas</em>, Inform. Process. Lett. 8 (1979) 121–123.</li>
+<li>F. Vega, <a href="https://pypi.org/project/siriaisa/">Siriaisa 0.0.8</a>, and <em>The Siriaisa Algorithm for Minimum Independent
+Dominating Set</em> (manuscript; Section &quot;Application to Boolean Satisfiability&quot; contains the proofs above).</li>
+<li>M. M. Halldórsson, <em>Approximating the minimum maximal independence number</em>, Inform. Process. Lett. 46 (1993) 169–172.</li>
 </ul>
-<h2>Implementation</h2>
+<h2 id="implementation">Implementation</h2>
 <ul>
 <li><strong>Programming Language:</strong> Python</li>
 <li><strong>Author:</strong> Frank Vega</li>
 </ul>
-<h2>License</h2>
+<h2 id="license">License</h2>
 <p>This code is released under the MIT License.</p>
 </body>
 </html>

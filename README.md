@@ -6,8 +6,10 @@ This work builds upon [SatyPy: SAT Solver](https://github.com/frankvegadelgado/s
 
 SatyPy decides Boolean formulas in CNF by reducing them to **Minimum Independent Dominating Set** (MIDS) and solving the MIDS instance with
 [Siriaisa](https://pypi.org/project/siriaisa/) 0.0.8. The decision rule is based on the conjecture that Siriaisa has an
-approximation ratio of `2√n`. Every `SATISFIABLE` comes with a checked assignment; `UNSATISFIABLE` comes from an exact
-stage or from the conjecture; everything else is `UNKNOWN`.
+approximation ratio of `2√n`. Every `SATISFIABLE` comes with a checked assignment, and every unsatisfiable formula is
+answered `UNSATISFIABLE` (both are proved, without the conjecture). The only answer that can be wrong is
+`UNSATISFIABLE` on a satisfiable formula, and that would be a counterexample to the conjecture (see
+[What Is Proved and What Rests on the Conjecture](#what-is-proved-and-what-rests-on-the-conjecture)).
 
 # Boolean Satisfiability (SAT) Problem
 
@@ -113,13 +115,15 @@ SatyPy prints its answer in the DIMACS output format.
   assignment has been checked against every clause of the input.
 
 - **Unsatisfiable:** `s UNSATISFIABLE`, when an exact stage proves it or when Siriaisa's independent dominating set
-  has more than `2√n · N` vertices (`2√n` conjecture, see below).
+  has more than `2√n · N` vertices. Every unsatisfiable formula receives this answer; on a satisfiable formula it can
+  only appear if Siriaisa's ratio exceeds `2√n` (`2√n` conjecture, see below).
 
 - **Comment lines:** before the answer, SatyPy prints DIMACS comment lines (`c ...`) that report what Siriaisa found
   on the MIDS graph and, when the formula is decided, a line `c decided by: ...` naming the stage that decided it
   (empty clause, simplification, 2-SAT, MIDS graph, or MIDS graph under the `2*sqrt(n)` conjecture).
 
-- **Undecided:** `s UNKNOWN`, preceded by the comment lines.
+- **Undecided:** `s UNKNOWN`, preceded by the comment lines. It is printed only when a certification check rejects an
+  assignment, which the proofs below show cannot happen at the MIDS stage.
 
 ## Examples
 
@@ -268,13 +272,74 @@ Variable IDs may be any positive integers (not necessarily `1..n`, contiguous, o
 5. **Siriaisa** 0.0.8 (`siriaisa.algorithm.find_independent_dominating_set`) computes an independent dominating set `S`:
    - if `|S| < bound`, `S` contains no clause vertex, and `reduction.decode_mids` reads an assignment from it, which is
      verified against the input (`s SATISFIABLE`);
-   - if `|S| > 2√n · N`, the formula is reported unsatisfiable under the conjecture that Siriaisa's approximation
-     ratio is at most `2√n` (`s UNSATISFIABLE`);
-   - otherwise `s UNKNOWN`.
+   - if `|S| > 2√n · N`, the formula is reported unsatisfiable (`s UNSATISFIABLE`); this is correct for every
+     unsatisfiable formula, and for satisfiable formulas it rests on the conjecture that Siriaisa's approximation
+     ratio is at most `2√n`;
+   - the remaining case (`bound ≤ |S| ≤ 2√n · N`) never occurs: an independent dominating set has either `N` or at
+     least `bound + N > 2√n · N` vertices.
 
 `s SATISFIABLE` is printed only after the assignment has been checked to be consistent and to contain a literal of
 every clause of the input (a final certification gate in `algorithm.solve`). `s UNSATISFIABLE` comes from steps 1–3 or
-from the conjecture in step 5. Use `-l` to see each stage in `app.log`.
+from step 5. Use `-l` to see each stage in `app.log`.
+
+## What Is Proved and What Rests on the Conjecture
+
+Write `N` and `m` for the variables and clauses of the residual formula, `bound` for the copies per clause vertex,
+`n = 2N + m · bound` for the vertices of the MIDS graph `G`, and `i(G)` for its minimum independent dominating set size.
+
+**Proved, without any conjecture.**
+
+- *Structure of the graph.* An independent dominating set with no clause vertex holds exactly one of `v`, `−v` for every
+  variable and is a satisfying assignment. One that holds a copy of a clause vertex holds all `bound` copies (they have
+  the same neighbours), and then it has at least `bound + N` vertices. So `i(G) = N` if the formula is satisfiable,
+  `i(G) ≥ bound + N` otherwise, and no independent dominating set has a size strictly between `N` and `bound + N`.
+  The value `bound + N` is attained when some assignment falsifies exactly one clause (all 8 sign patterns of 3
+  variables, `formula3.cnf`, is an example).
+- *The bound.* `reduction.mids_bound` returns the least integer with `bound + N > 2√n · N`; it satisfies
+  `N ≤ bound ≤ 4mN² + 1`, so the graph has at most `2N + 4m²N² + m` vertices.
+- *The answers.* If `|S| < bound`, `S` decodes to a satisfying assignment that passes the check. Otherwise
+  `|S| ≥ bound + N > 2√n · N`, so the answer is `UNSATISFIABLE`: the MIDS stage never answers `UNKNOWN`, and every
+  unsatisfiable formula is answered `UNSATISFIABLE`.
+- *The only possible error.* On a satisfiable formula the answer is `UNSATISFIABLE` exactly when Siriaisa's set
+  contains a clause vertex, and then its ratio is at least `(bound + N)/N > 2√n`.
+
+**Resting on the conjecture.** If Siriaisa's ratio is at most `2√n` on these graphs, a satisfiable formula gives
+`|S| ≤ 2√n · N < bound + N`, so `S` has no clause vertex and SatyPy answers `SATISFIABLE` with a checked assignment.
+Then SatyPy would decide every CNF formula correctly in polynomial time, which would imply P = NP; this is why the
+`2√n` ratio is stated as a conjecture.
+
+**What Siriaisa's proved bound does not give.** Siriaisa proves that its degree-splitting strategy gives at most
+`⌊√n⌋ · (i(G) + s(G))` vertices, where `s(G)` is the sum of `⌈deg(v)/k⌉ − 1` over the vertices of degree larger than
+`k = ⌊√n⌋`, and that the output satisfies the same bound when the decoded set is independent. On the MIDS graph a
+literal that occurs `occ` times has degree `1 + bound · occ` and `bound/k ≈ 2N`, so `s(G) ≈ 2N · L`, where `L` is the
+number of literal occurrences of the residual formula (pure literals are removed in step 2, so `L ≥ 2N` and
+`s(G) > 4N² − 2N²/k − 2N`). The proved bound therefore lies far above the decision threshold `2√n · N`: on
+`formula2.cnf` (`N = 3`, `m = 7`, `n = 1,735`), `s(G) = 126` and the bound is `⌊√n⌋ · (N + s(G)) = 5,289`, against a
+threshold of `249.9`. Converting the formula to 3CNF first does not change this. More generally, every graph satisfies
+
+```
+⌊√n⌋ · (i(G) + s(G)) ≥ n − i(G)
+```
+
+(a minimum independent dominating set `D` dominates the other `n − i(G)` vertices, so the degrees of `D` add up to at
+least `n − i(G)`, and each `d` in `D` contributes at least `deg(d)/k − 1` to `s(G)`). So for any reduction with
+`i = a` on satisfiable and `i ≥ b` on unsatisfiable formulas, the proved bound separates them only if `b > n − a`,
+which forces the unsatisfiable graphs to have maximum degree below `a` and fewer than `a²` edges, while the satisfiable
+ones have at least `n − a` edges.
+
+The correct `SATISFIABLE` answers therefore come from Siriaisa's actual output, not from this bound: in
+`car/small_formulas.py` (187 formulas, 117 decided on the MIDS graph), Siriaisa returned `|S| = N` on all 114
+satisfiable instances, and every answer agreed with exhaustive search.
+
+**Checking on small formulas.** `car/small_formulas.py` decides very small random formulas and the small DIMACS files of
+`benchmarks` with SatyPy and with exhaustive search, compares the answers, and reports, for the formulas decided on the
+MIDS graph, `|S|` against `2√n · N`, whether `|S| ≥ bound + N` on unsatisfiable formulas, and `s(G)`. It runs from the
+repository root with or without SatyPy installed:
+
+```bash
+python car/small_formulas.py
+python car/small_formulas.py --variables 3 6 --clauses 16 --repeat 10 --seed 7
+```
 
 ## References
 
@@ -282,7 +347,9 @@ from the conjecture in step 5. Use `-l` to see each stage in `app.log`.
   Intractability*, Freeman, 1979.
 - B. Aspvall, M. F. Plass and R. E. Tarjan, *A linear-time algorithm for testing the truth of certain quantified
   Boolean formulas*, Inform. Process. Lett. 8 (1979) 121–123.
-- F. Vega, [Siriaisa 0.0.8](https://pypi.org/project/siriaisa/).
+- F. Vega, [Siriaisa 0.0.8](https://pypi.org/project/siriaisa/), and *The Siriaisa Algorithm for Minimum Independent
+  Dominating Set* (manuscript; Section "Application to Boolean Satisfiability" contains the proofs above).
+- M. M. Halldórsson, *Approximating the minimum maximal independence number*, Inform. Process. Lett. 46 (1993) 169–172.
 
 ## Implementation
 
