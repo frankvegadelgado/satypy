@@ -9,7 +9,7 @@
 # formula, bound copies per clause vertex and n vertices:
 #   mids_size: size of Siriaisa's independent dominating set S (N when the residual formula is satisfiable and S
 #     has no clause vertex; every independent dominating set with a clause vertex has at least bound + N);
-#   ratio: |S| / N for satisfiable residual formulas, against 2 * sqrt(n);
+#   ratio: |S| / N for satisfiable residual formulas, against the ratio rule 2N (two_N);
 #   lower_bound_ok: for unsatisfiable residual formulas, whether |S| >= bound + N;
 #   splitting_excess: s(G) of the Siriaisa paper (k = floor(sqrt(n)), sum over vertices of degree > k of
 #     ceil(deg / k) - 1), with i(G) + s(G) and 2 * N^2.
@@ -39,9 +39,10 @@ from satypy import algorithm, parser, reduction, utils  # noqa: E402
 
 DEFAULT_FILES = ["benchmarks/simple/file.cnf", "benchmarks/simple/tautology.cnf", "benchmarks/simple/trivial.cnf",
                  "benchmarks/test_formulas/formula0.cnf", "benchmarks/test_formulas/formula1.cnf",
-                 "benchmarks/test_formulas/formula2.cnf", "benchmarks/test_formulas/formula3.cnf"]
+                 "benchmarks/test_formulas/formula2.cnf", "benchmarks/test_formulas/formula3.cnf",
+                 "benchmarks/test_formulas/planted_unique_v6_2.cnf"]
 COLUMNS = ["name", "variables", "clauses", "expected", "answer", "correct", "stage", "residual_variables",
-           "residual_clauses", "bound", "mids_vertices", "mids_edges", "mids_size", "ratio", "two_sqrt_n",
+           "residual_clauses", "bound", "mids_vertices", "mids_edges", "mids_size", "ratio", "two_N",
            "lower_bound_ok", "splitting_excess", "i_plus_s", "two_N_squared", "seconds"]
 
 
@@ -90,7 +91,7 @@ def run(name, formula):
         s = splitting_excess(graph)
         i_value = num_variables if residual_expected else None
         row.update(residual_variables=num_variables, residual_clauses=len(clauses), bound=bound, mids_vertices=n,
-                   mids_edges=graph.number_of_edges(), mids_size=size, two_sqrt_n=f"{2 * n ** 0.5:.2f}",
+                   mids_edges=graph.number_of_edges(), mids_size=size, two_N=2 * num_variables,
                    splitting_excess=s, two_N_squared=2 * num_variables ** 2)
         if residual_expected:
             row.update(ratio=f"{size / num_variables:.4f}", i_plus_s=i_value + s)

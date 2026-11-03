@@ -1,5 +1,4 @@
 from collections import deque
-from math import isqrt
 import networkx as nx
 
 def reduce_sat_to_simplified_sat(clauses):
@@ -79,12 +78,14 @@ def reduce_sat_to_simplified_sat(clauses):
 # ===========================================================================
 
 def mids_bound(num_variables, num_clauses):
-    """Least number of copies per clause vertex with bound + N > 2 * sqrt(n) * N, where n = 2N + m * bound is the
-    number of vertices of the graph (N variables, m clauses). With C = bound + N the condition reads
-    C^2 - 4mN^2 * C - (8N^3 - 4mN^3) > 0, which holds iff C > 2mN^2 + sqrt(4m^2 N^4 + 8N^3 - 4mN^3), so
-    bound = 2mN^2 + isqrt(4m^2 N^4 + 8N^3 - 4mN^3) + 1 - N."""
-    N, m = num_variables, num_clauses
-    return 2 * m * N * N + isqrt(4 * m * m * N ** 4 + 8 * N ** 3 - 4 * m * N ** 3) + 1 - N
+    """Least number of copies per clause vertex with bound + N > 2N * N (N variables): bound = 2N^2 - N + 1.
+
+    Every independent dominating set of the graph has N vertices (one endpoint of each edge {v, -v}, a satisfying
+    assignment) or at least bound + N > 2N^2, so on a satisfiable formula its ratio is 1 or larger than 2N = 2 i(G).
+    bound >= N + 1, as the structure and the decoding need. The number of clauses `num_clauses` does not enter; the
+    graph has n = 2N + m * bound <= 2N + 2mN^2 vertices."""
+    N = num_variables
+    return 2 * N * N - N + 1
 
 
 def reduce_sat_to_mids(clauses, max_variable):
@@ -93,12 +94,12 @@ def reduce_sat_to_mids(clauses, max_variable):
 
     Each variable v gives the edge {v, -v}. Each clause gives `bound` = mids_bound(N, m) vertices adjacent to
     its literals (N = number of variables, m = number of clauses); these clause vertices are numbered from
-    max_variable + 1. The graph has n = 2N + m * bound vertices and bound + N > 2 * sqrt(n) * N. The formula
+    max_variable + 1. The graph has n = 2N + m * bound vertices and bound + N > 2N * N. The formula
     is satisfiable iff the graph has an independent dominating set of N vertices (one endpoint of each edge
     {v, -v}). Otherwise every independent dominating set contains all `bound` copies of some clause vertex: with
     the copies of exactly one clause it also contains an endpoint of each edge {v, -v} (a clause holds at most one
     of v, -v), so it has bound + N vertices; with the copies of two or more clauses it has at least
-    2 * bound >= bound + N vertices. So it has more than 2 * sqrt(n) * N vertices.
+    2 * bound >= bound + N vertices. So it has more than 2N * N vertices (ratio larger than 2N).
 
     Returns (G, N, bound)."""
     G = nx.Graph()

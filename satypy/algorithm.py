@@ -4,6 +4,9 @@ from siriaisa.algorithm import find_independent_dominating_set
 
 from . import reduction, utils
 
+#: Largest number of nested branchings on a clause named by Siriaisa's set (each multiplies the work by the clause width).
+DEFAULT_BRANCH_DEPTH = 2
+
 CANDIDATES = ("the assignment", "the complement of the assignment", "the committed literals only")
 COMPLETIONS = ("other variables True", "other variables False")
 
@@ -90,14 +93,14 @@ def _solve_two_sat(clauses):
     assignment = {v if comp[v] > comp[-v] else -v for v in variables}
     return True, assignment
 
-def solve(formula, logger=None, stats=None):
+def solve(formula, logger=None, stats=None, branch_depth=DEFAULT_BRANCH_DEPTH):
     """Decide a CNF formula; see _solve. This wrapper is the final certification gate: a
     SATISFIABLE answer is returned only if the assignment is consistent (no variable with both
     signs) and contains a literal of every clause of the original formula; otherwise the
     answer is downgraded to UNKNOWN."""
     stats = {} if stats is None else stats
     stats["comments"] = []
-    satisfiability, answer = _solve(formula, logger, stats)
+    satisfiability, answer = _solve(formula, logger, stats, branch_depth)
     if satisfiability is True:
         if answer is None:
             return None, None
@@ -109,7 +112,7 @@ def solve(formula, logger=None, stats=None):
     return satisfiability, answer
 
 
-def _solve(formula, logger=None, stats=None):
+def _solve(formula, logger=None, stats=None, branch_depth=DEFAULT_BRANCH_DEPTH):
     """Decide a CNF formula given as a list of clauses (lists of non-zero integers; variable IDs
     need not be 1..n, contiguous or sorted).
 
@@ -117,11 +120,17 @@ def _solve(formula, logger=None, stats=None):
     2. residual 2-SAT: solved exactly by _solve_two_sat;
     3. otherwise reduce_sat_to_mids (the residual formula with N variables and m clauses -> a graph
        with n vertices: an edge {v, -v} per variable and bound copies of a vertex per clause, adjacent
-       to its literals, with bound + N > 2 * sqrt(n) * N) and Siriaisa's independent dominating set S:
+       to its literals, with bound + N > 2N * N) and Siriaisa's independent dominating set S:
        - |S| < bound: S has no clause vertex, so it is one endpoint of each edge {v, -v} and it is
          decoded into an assignment, which is verified (SATISFIABLE);
-       - |S| > 2 * sqrt(n) * N: UNSATISFIABLE under the conjecture that Siriaisa's approximation
-         ratio is at most 2 * sqrt(n) (a satisfiable formula has a MIDS of N vertices, an
+       - |S| > 2N * N (always the case when |S| >= bound): S holds the copies of the clauses of a
+         set F, with |F| = floor(|S| / bound), and its literals, completed with False, falsify at most |F|
+         clauses. If branch_depth > 0, the formula is split on a shortest falsified clause C (the formula
+         implies C, so it is satisfiable iff some formula + [l], l in C, is) and each branch is decided by
+         _solve with branch_depth - 1: SATISFIABLE if a branch is, UNSATISFIABLE if every branch is.
+         Without branching (depth 0), or if a branch is UNKNOWN, UNSATISFIABLE by the ratio rule: on a
+         satisfiable formula Siriaisa's set has N vertices or a ratio larger than 2N, so the rule assumes
+         that its ratio on the graph is at most 2N (a satisfiable formula has a MIDS of N vertices, an
          unsatisfiable one has none smaller than bound + N);
        - otherwise UNKNOWN.
        Comment lines in stats["comments"] report what the stage found.
@@ -201,15 +210,68 @@ def _solve(formula, logger=None, stats=None):
                                  f"the decoded assignment does not satisfy the formula")
         return None, None
 
-    # Conjecture: Siriaisa's approximation ratio is at most 2 * sqrt(n); |S| > 2 * sqrt(n) * N <=> |S|^2 > 4 * N^2 * n.
+    # Ratio rule: on a satisfiable formula Siriaisa's set has N vertices or more than 2N * N (ratio larger than 2N).
     n = graph.number_of_nodes()
-    if size * size > 4 * num_variables ** 2 * n:
-        log("MIDS: Siriaisa's set exceeds 2 * sqrt(n) * N")
-        stats["stage"] = "mids (conjecture)"
-        stats["comments"].append(f"c decided by: MIDS graph under the 2*sqrt(n) conjecture (Siriaisa's set has {size} "
-                                 f"vertices > 2*sqrt(n)*N, n = {n}, N = {num_variables})")
+    if size > 2 * num_variables * num_variables:
+        if branch_depth > 0:
+            decided = _branch(formula, clauses, solution, independent_dominating_set, max_variable, bound,
+                              logger, stats, branch_depth)
+            if decided is not None:
+                return decided
+        log("MIDS: Siriaisa's set exceeds 2N * N")
+        stats["stage"] = "mids (ratio rule)"
+        stats["comments"].append(f"c decided by: MIDS graph under the ratio-2N rule (Siriaisa's set has {size} "
+                                 f"vertices > 2N*N, n = {n}, N = {num_variables})")
         return False, None
     stats["stage"] = "mids (undecided)"
     stats["comments"].append(f"c MIDS graph: {n} vertices; Siriaisa's set: {size} vertices, "
-                             f"not above 2*sqrt(n)*N (N = {num_variables})")
+                             f"not above 2N*N (N = {num_variables})")
     return None, None
+
+
+def _branch(formula, clauses, solution, independent_dominating_set, max_variable, bound, logger, stats, branch_depth):
+    """Exact split of the residual formula `clauses` on a clause named by Siriaisa's set S.
+
+    S holds the copies of the clauses of a set F with |F| = floor(|S| / bound), and its literals, completed with
+    False on the other variables, falsify at most |F| clauses. The formula implies each of its clauses C, so it is
+    satisfiable iff clauses + [[l]] is for some literal l of C; every branch is decided by _solve with
+    branch_depth - 1. Returns (True, assignment) if a branch is satisfiable and its assignment, with the committed
+    literals `solution`, satisfies `formula`; (False, None) if every branch is unsatisfiable; None otherwise (the
+    caller then keeps its own decision)."""
+    literals = reduction.decode_mids(independent_dominating_set, max_variable)
+    variables = {abs(lit) for clause in clauses for lit in clause}
+    completed = literals | {-v for v in variables if v not in literals and -v not in literals}
+    falsified = [clause for clause in clauses if not any(lit in completed for lit in clause)]
+    copies = len(independent_dominating_set) // bound
+    if not falsified:
+        ok, full = check(formula, solution, completed)
+        if ok:
+            stats["stage"] = "mids (decoded)"
+            stats["comments"].append(f"c decided by: MIDS graph (Siriaisa's set holds the copies of {copies} "
+                                     f"clause(s); its literals satisfy the formula)")
+            return True, full
+        return None
+    clause = min(falsified, key=len)
+    if logger is not None:
+        utils.println(f"MIDS: Siriaisa's set holds the copies of {copies} clause(s); its literals falsify "
+                      f"{len(falsified)}; branching on {sorted(clause, key=abs)}", logger)
+    undecided = False
+    for lit in sorted(clause, key=abs):
+        branch_stats = {}
+        satisfiability, answer = _solve(clauses + [[lit]], logger, branch_stats, branch_depth - 1)
+        if satisfiability is True:
+            ok, full = check(formula, solution, set(answer))
+            if ok:
+                stats["stage"] = "mids (branching)"
+                stats["comments"].append(f"c decided by: branching on the clause {sorted(clause, key=abs)} named by "
+                                         f"Siriaisa's set (branch {lit}: {branch_stats.get('stage', '')})")
+                return True, full
+            undecided = True
+        elif satisfiability is None:
+            undecided = True
+    if undecided:
+        return None
+    stats["stage"] = "mids (branching)"
+    stats["comments"].append(f"c decided by: branching on the clause {sorted(clause, key=abs)} named by Siriaisa's "
+                             f"set (every branch unsatisfiable)")
+    return False, None

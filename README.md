@@ -5,10 +5,11 @@
 This work builds upon [SatyPy: SAT Solver](https://github.com/frankvegadelgado/satypy).
 
 SatyPy decides Boolean formulas in CNF by reducing them to **Minimum Independent Dominating Set** (MIDS) and solving the MIDS instance with
-[Siriaisa](https://pypi.org/project/siriaisa/) 0.0.8. The decision rule is based on the conjecture that Siriaisa has an
-approximation ratio of `2√n`. Every `SATISFIABLE` comes with a checked assignment, and every unsatisfiable formula is
-answered `UNSATISFIABLE` (both are proved, without the conjecture). The only answer that can be wrong is
-`UNSATISFIABLE` on a satisfiable formula, and that would be a counterexample to the conjecture (see
+[Siriaisa](https://pypi.org/project/siriaisa/) 0.0.8. Every `SATISFIABLE` comes with a checked assignment, and every
+unsatisfiable formula is answered `UNSATISFIABLE` (both are proved, without any conjecture). The only answer that can
+be wrong is `UNSATISFIABLE` on a satisfiable formula, and only when Siriaisa's ratio on the MIDS graph exceeds `2N` on
+the formula and on every branch that SatyPy explores. The general conjecture behind the method is that Siriaisa has
+approximation ratio `n^(1−ε)` with `ε = 1/4`, that is `n^(3/4)` (see
 [What Is Proved and What Rests on the Conjecture](#what-is-proved-and-what-rests-on-the-conjecture)).
 
 # Boolean Satisfiability (SAT) Problem
@@ -114,24 +115,28 @@ SatyPy prints its answer in the DIMACS output format.
   Positive numbers are variables assigned True, negative numbers variables assigned False, and `0` ends the line. The
   assignment has been checked against every clause of the input.
 
-- **Unsatisfiable:** `s UNSATISFIABLE`, when an exact stage proves it or when Siriaisa's independent dominating set
-  has more than `2√n · N` vertices. Every unsatisfiable formula receives this answer; on a satisfiable formula it can
-  only appear if Siriaisa's ratio exceeds `2√n` (`2√n` conjecture, see below).
+- **Unsatisfiable:** `s UNSATISFIABLE`, when an exact stage proves it, when every branch on the clause named by
+  Siriaisa's set is unsatisfiable, or, at the deepest level, when Siriaisa's independent dominating set has more than
+  `2N · N` vertices (`N` the number of variables). Every unsatisfiable formula receives this answer; on a satisfiable
+  formula it can only appear if Siriaisa's ratio exceeds `2N` on a whole chain of satisfiable branches (see below).
 
 - **Comment lines:** before the answer, SatyPy prints DIMACS comment lines (`c ...`) that report what Siriaisa found
   on the MIDS graph and, when the formula is decided, a line `c decided by: ...` naming the stage that decided it
-  (empty clause, simplification, 2-SAT, MIDS graph, or MIDS graph under the `2*sqrt(n)` conjecture).
+  (empty clause, simplification, 2-SAT, MIDS graph, branching on the clause named by Siriaisa's set, or MIDS graph
+  under the ratio-`2N` rule).
 
 - **Undecided:** `s UNKNOWN`, preceded by the comment lines. It is printed only when a certification check rejects an
   assignment, which the proofs below show cannot happen at the MIDS stage.
 
 ## Examples
 
-The directory `benchmarks/test_formulas` contains four small formulas.
+The directory `benchmarks/test_formulas` contains five small formulas; `planted_unique_v6_2.cnf` (6 variables, 16
+clauses, a single satisfying assignment) exercises the branching step.
 
 ```
 saty -i benchmarks/test_formulas/formula2.cnf
 saty -i benchmarks/test_formulas/formula3.cnf
+saty -i benchmarks/test_formulas/planted_unique_v6_2.cnf -b -l
 batch_saty -i benchmarks/test_formulas -a -b -c
 ```
 
@@ -262,30 +267,39 @@ Variable IDs may be any positive integers (not necessarily `1..n`, contiguous, o
 4. **Reduction to MIDS** (`reduction.reduce_sat_to_mids`): otherwise, with `N` the number of variables of the residual
    formula and `m` its number of clauses, the graph has an edge `{v, −v}` for each variable `v` and, for each clause,
    `bound` vertices adjacent to the literals of the clause (clauses of any width), where
-   `bound = 2mN² + ⌊√(4m²N⁴ + 8N³ − 4mN³)⌋ + 1 − N` (`reduction.mids_bound`) is the least integer with
-   `bound + N > 2√n · N` for the number of vertices `n = 2N + m · bound`. The formula is satisfiable if and only if
+   `bound = 2N² − N + 1` (`reduction.mids_bound`) is the least integer with `bound + N > 2N · N`; the graph has
+   `n = 2N + m · bound` vertices. The formula is satisfiable if and only if
    the graph has an independent dominating set of `N` vertices (one endpoint of each edge `{v, −v}`); otherwise every
    independent dominating set contains all `bound` copies of some clause vertex. With the copies of exactly one
    clause it also contains an endpoint of each edge `{v, −v}` (a clause holds at most one of `v`, `−v`), so it has
    `bound + N` vertices; with the copies of two or more clauses it has at least `2 · bound ≥ bound + N` vertices.
-   So it has more than `2√n · N` vertices.
+   So it has more than `2N · N` vertices: on a satisfiable formula its ratio is larger than `2N`.
 5. **Siriaisa** 0.0.8 (`siriaisa.algorithm.find_independent_dominating_set`) computes an independent dominating set `S`:
    - if `|S| < bound`, `S` contains no clause vertex, and `reduction.decode_mids` reads an assignment from it, which is
      verified against the input (`s SATISFIABLE`);
-   - if `|S| > 2√n · N`, the formula is reported unsatisfiable (`s UNSATISFIABLE`); this is correct for every
-     unsatisfiable formula, and for satisfiable formulas it rests on the conjecture that Siriaisa's approximation
-     ratio is at most `2√n`;
-   - the remaining case (`bound ≤ |S| ≤ 2√n · N`) never occurs: an independent dominating set has either `N` or at
-     least `bound + N > 2√n · N` vertices.
+   - otherwise `|S| ≥ bound + N > 2N · N` (an independent dominating set has either `N` or at least `bound + N`
+     vertices), and step 6 runs.
+6. **Branching on the clause named by Siriaisa's set** (`algorithm._branch`, up to depth
+   `algorithm.DEFAULT_BRANCH_DEPTH = 2`): `S` holds the copies of exactly `⌊|S| / bound⌋` clauses, and its literals,
+   completed with False, falsify at most that many clauses. If they falsify none, the formula is satisfiable
+   (`s SATISFIABLE`). Otherwise SatyPy takes a shortest falsified clause `C` and decides every formula `φ ∧ ℓ`, `ℓ ∈ C`,
+   with steps 2–6 and one level less: the formula implies `C`, so it is satisfiable exactly when some branch is.
+   - some branch satisfiable: `s SATISFIABLE`, with the checked assignment of that branch;
+   - every branch unsatisfiable: `s UNSATISFIABLE`;
+   - at depth 0 (no branching left): `s UNSATISFIABLE` by the ratio-`2N` rule, since `|S| > 2N · N`; this is correct for
+     every unsatisfiable formula, and for a satisfiable one it assumes that Siriaisa's ratio on the graph is at most
+     `2N`.
 
 `s SATISFIABLE` is printed only after the assignment has been checked to be consistent and to contain a literal of
-every clause of the input (a final certification gate in `algorithm.solve`). `s UNSATISFIABLE` comes from steps 1–3 or
-from step 5. Use `-l` to see each stage in `app.log`.
+every clause of the input (a final certification gate in `algorithm.solve`). `s UNSATISFIABLE` comes from steps 1–3, from
+the branching, or from the ratio-`2N` rule at depth 0. `algorithm.solve(formula, branch_depth=0)` gives the rule without
+branching. Use `-l` to see each stage in `app.log`.
 
 ## What Is Proved and What Rests on the Conjecture
 
 Write `N` and `m` for the variables and clauses of the residual formula, `bound` for the copies per clause vertex,
 `n = 2N + m · bound` for the vertices of the MIDS graph `G`, and `i(G)` for its minimum independent dominating set size.
+The proofs are in the Siriaisa paper (Section "Application to Boolean Satisfiability").
 
 **Proved, without any conjecture.**
 
@@ -293,53 +307,113 @@ Write `N` and `m` for the variables and clauses of the residual formula, `bound`
   variable and is a satisfying assignment. One that holds a copy of a clause vertex holds all `bound` copies (they have
   the same neighbours), and then it has at least `bound + N` vertices. So `i(G) = N` if the formula is satisfiable,
   `i(G) ≥ bound + N` otherwise, and no independent dominating set has a size strictly between `N` and `bound + N`.
-  The value `bound + N` is attained when some assignment falsifies exactly one clause (all 8 sign patterns of 3
-  variables, `formula3.cnf`, is an example).
-- *The bound.* `reduction.mids_bound` returns the least integer with `bound + N > 2√n · N`; it satisfies
-  `N ≤ bound ≤ 4mN² + 1`, so the graph has at most `2N + 4m²N² + m` vertices.
-- *The answers.* If `|S| < bound`, `S` decodes to a satisfying assignment that passes the check. Otherwise
-  `|S| ≥ bound + N > 2√n · N`, so the answer is `UNSATISFIABLE`: the MIDS stage never answers `UNKNOWN`, and every
-  unsatisfiable formula is answered `UNSATISFIABLE`.
-- *The only possible error.* On a satisfiable formula the answer is `UNSATISFIABLE` exactly when Siriaisa's set
-  contains a clause vertex, and then its ratio is at least `(bound + N)/N > 2√n`.
+- *Two values of the ratio.* On the graph of a satisfiable formula, the ratio `|S| / i(G)` of any independent dominating
+  set `S` is either exactly `1` (and `S` is a satisfying assignment) or at least `(bound + N) / N`, when `S` holds clause
+  copies. With SatyPy's `bound` this is larger than `2N`, and with `bound_t` (below) larger than `n^(1−1/t)`, in
+  particular larger than `n^(3/4)` for `t = 4`. So on these graphs a ratio of at most `2N` (or `n^(1−1/t)`) holds
+  exactly when `S` is optimal.
+- *Maximum satisfiability.* With `μ` the least number of clauses falsified by an assignment,
+  `bound · μ ≤ i(G) ≤ bound · μ + N`, so `μ = ⌊i(G) / bound⌋`; every independent dominating set `D` holds the copies of
+  exactly `⌊|D| / bound⌋` clauses and decodes to an assignment that falsifies at most that many.
+- *The bound.* `reduction.mids_bound` returns `2N² − N + 1`, the least integer with `bound + N > 2N · N`; it satisfies
+  `bound ≥ N + 1`, and the graph has at most `2N + 2mN²` vertices.
+- *The answers.* Every unsatisfiable formula is answered `UNSATISFIABLE`, every `SATISFIABLE` answer carries a checked
+  assignment, and the MIDS stage never answers `UNKNOWN`.
+- *Branching.* Splitting on a clause is exact, and branching to depth `d` runs Siriaisa at most `1 + w + … + w^d` times
+  (`w` the largest clause width), each time on the graph of a formula with at most `N` variables and `m` clauses, so it
+  is polynomial for every fixed `d`. A satisfiable formula is answered `UNSATISFIABLE` only if there is a chain of
+  `d + 1` satisfiable formulas, each obtained from the previous one by fixing a literal, on all of whose graphs
+  Siriaisa's set contains clause vertices (ratio larger than `2N`).
+- *What Siriaisa's proved bound does not give.* Siriaisa proves that its degree-splitting strategy gives at most
+  `⌊√n⌋ · (i(G) + s(G))` vertices, where `s(G)` is the sum of `⌈deg(v)/k⌉ − 1` over the vertices of degree larger than
+  `k = ⌊√n⌋`. Every graph satisfies `⌊√n⌋ · (i(G) + s(G)) ≥ n − i(G)`, so on the graph of a satisfiable formula the
+  bound is at least `N + m · bound ≥ bound + N`, for every number of copies: it never shows that Siriaisa's set avoids
+  the clause vertices.
 
-**Resting on the conjecture.** If Siriaisa's ratio is at most `2√n` on these graphs, a satisfiable formula gives
-`|S| ≤ 2√n · N < bound + N`, so `S` has no clause vertex and SatyPy answers `SATISFIABLE` with a checked assignment.
-Then SatyPy would decide every CNF formula correctly in polynomial time, which would imply P = NP; this is why the
-`2√n` ratio is stated as a conjecture.
+**The conjecture: ratio `n^(1−ε)` with `ε = 1/4`.** The Siriaisa paper conjectures that Siriaisa's output satisfies
+`|S| / i(G) ≤ n^(3/4)` on every graph; a proof would imply P = NP, since no polynomial-time algorithm has ratio
+`n^(1−ε)` for any `ε > 0` unless P = NP (Halldórsson). The MIDS graph can be sized for any ratio `n^(1−1/t)`: with
+`bound_t = N^t · (3m)^(t−1) + 1` copies per clause vertex, the graph has `n = 3^(t−1) N^t m^t + m + 2N` vertices,
+`bound_t + N > N · n^(1−1/t)`, and every `n^(1−1/t)`-approximation decides satisfiability by `|S| < bound_t`. For
+`ε = 1/4` (`t = 4`), `bound_4 = 27N⁴m³ + 1` and `n = 27N⁴m⁴ + m + 2N`: if the conjecture holds, the MIDS stage with
+`bound_4` copies decides every CNF formula correctly in polynomial time. SatyPy uses the much smaller `bound` of step 4
+(the ratio-`2N` rule), because the graph for `bound_4` grows as `27N⁴m⁴` and is too large to build except for very
+small formulas; by the two values of the ratio, every choice of `bound` asks the same of Siriaisa on a satisfiable
+formula: to return an optimal set.
 
-**What Siriaisa's proved bound does not give.** Siriaisa proves that its degree-splitting strategy gives at most
-`⌊√n⌋ · (i(G) + s(G))` vertices, where `s(G)` is the sum of `⌈deg(v)/k⌉ − 1` over the vertices of degree larger than
-`k = ⌊√n⌋`, and that the output satisfies the same bound when the decoded set is independent. On the MIDS graph a
-literal that occurs `occ` times has degree `1 + bound · occ` and `bound/k ≈ 2N`, so `s(G) ≈ 2N · L`, where `L` is the
-number of literal occurrences of the residual formula (pure literals are removed in step 2, so `L ≥ 2N` and
-`s(G) > 4N² − 2N²/k − 2N`). The proved bound therefore lies far above the decision threshold `2√n · N`: on
-`formula2.cnf` (`N = 3`, `m = 7`, `n = 1,735`), `s(G) = 126` and the bound is `⌊√n⌋ · (N + s(G)) = 5,289`, against a
-threshold of `249.9`. Converting the formula to 3CNF first does not change this. More generally, every graph satisfies
+## Running the Experiments
 
-```
-⌊√n⌋ · (i(G) + s(G)) ≥ n − i(G)
-```
+The folder `car/` contains two experiment scripts. Both run from the repository root (or from `car/`) with or without
+SatyPy installed: they use the repository's own `satypy/`. Siriaisa (`pip install siriaisa`) must be installed.
 
-(a minimum independent dominating set `D` dominates the other `n − i(G)` vertices, so the degrees of `D` add up to at
-least `n − i(G)`, and each `d` in `D` contributes at least `deg(d)/k − 1` to `s(G)`). So for any reduction with
-`i = a` on satisfiable and `i ≥ b` on unsatisfiable formulas, the proved bound separates them only if `b > n − a`,
-which forces the unsatisfiable graphs to have maximum degree below `a` and fewer than `a²` edges, while the satisfiable
-ones have at least `n − a` edges.
-
-The correct `SATISFIABLE` answers therefore come from Siriaisa's actual output, not from this bound: in
-`car/small_formulas.py` (187 formulas, 117 decided on the MIDS graph), Siriaisa returned `|S| = N` on all 114
-satisfiable instances, and every answer agreed with exhaustive search.
-
-**Checking on small formulas.** `car/small_formulas.py` decides very small random formulas and the small DIMACS files of
-`benchmarks` with SatyPy and with exhaustive search, compares the answers, and reports, for the formulas decided on the
-MIDS graph, `|S|` against `2√n · N`, whether `|S| ≥ bound + N` on unsatisfiable formulas, and `s(G)`. It runs from the
-repository root with or without SatyPy installed:
+**`car/small_formulas.py`** decides every formula with SatyPy and with exhaustive search over all assignments and
+compares the answers. Its formulas are the small DIMACS files of `benchmarks/simple` and `benchmarks/test_formulas`
+(at most `--max-file-variables` variables) and random k-CNF formulas.
 
 ```bash
 python car/small_formulas.py
 python car/small_formulas.py --variables 3 6 --clauses 16 --repeat 10 --seed 7
+python car/small_formulas.py --no-files --width 4
 ```
+
+| Option | Meaning (default) |
+|---|---|
+| `--variables MIN MAX` | number of variables of the random formulas (3 5) |
+| `--clauses M` | largest number of clauses; every number from 1 to `M` is used (12) |
+| `--width K` | literals per clause (3) |
+| `--repeat R` | random formulas per number of variables and clauses (5) |
+| `--seed S` | random seed (2026) |
+| `--max-file-variables V` | largest DIMACS file included (10) |
+| `--no-files` | random formulas only |
+| `-o FILE` | output CSV (`car/small_formulas_results.csv`) |
+
+For each formula it prints and writes the expected answer, SatyPy's answer, whether it is correct, and the deciding
+stage; for formulas decided on the MIDS graph also the residual size, `bound`, the vertices and edges of the graph,
+`|S|`, `|S| / N` against `2N`, whether `|S| ≥ bound + N` on unsatisfiable formulas, and the splitting excess `s(G)`
+with `i(G) + s(G)` and `2N²`. The summary counts correct, wrong and unknown answers and lists every wrong one.
+
+**`car/strategy_search.py`** uses formulas built to stress the MIDS stage: satisfiable formulas with a single planted
+solution (`planted-unique`), satisfiable formulas that neither the all-True nor the all-False assignment satisfies
+(`nonconstant`), and unsatisfiable formulas (`unsat`); it keeps only formulas whose residual formula reaches the MIDS
+graph.
+
+```bash
+python car/strategy_search.py
+python car/strategy_search.py --variables 4 7 --count 10 --seed 11
+```
+
+| Option | Meaning (default) |
+|---|---|
+| `--variables MIN MAX` | number of variables (3 6) |
+| `--count C` | formulas per kind and number of variables (5) |
+| `--max-clauses M` | largest number of clauses (16) |
+| `--attempts A` | generation attempts per formula (2000) |
+| `--seed S` | random seed (2026) |
+| `-o FILE` | output CSV (`car/strategy_search_results.csv`) |
+
+For each formula it prints and writes the number of satisfying assignments, SatyPy's answer and its correctness, the
+deciding stage (`mids`, `mids (branching)`, `mids (ratio rule)`, ...), the size of every Siriaisa strategy `c1`–`c18`
+on the formula's graph and which of them reach exactly `N` vertices, and a check of the maximum-satisfiability
+statement: `⌊|S| / bound⌋ ≥ μ`, and the decoded assignment falsifies at most `⌊|S| / bound⌋` clauses. The summary counts
+the answers by stage and the formulas on which each strategy is optimal.
+
+**Testing a single formula.** Any DIMACS file can be checked against exhaustive search (`-b`, at most 30 variables) and
+MiniSat 2.2 (`-a`), with the deciding stage in `app.log` (`-l`):
+
+```bash
+saty -i benchmarks/test_formulas/planted_unique_v6_2.cnf -a -b -l
+test_saty -d 5 -m 12 -n 20 -r 7 -a -b -c
+```
+
+The MIDS graph has `2N + m · (2N² − N + 1)` vertices, about `2mN²`, and every branching level runs Siriaisa again on up
+to `w` such graphs (`w` the largest clause width). For residual 3-CNF formulas with the sizes of some benchmarks:
+
+| Size of | Variables | Clauses | `bound` | Vertices | Edges |
+|---|---|---|---|---|---|
+| `uf20-91` | 20 | 91 | 781 | 71,111 | 213,233 |
+| `aim-50-1_6` | 50 | 80 | 4,951 | 396,180 | 1,188,290 |
+| `aim-100-1_6` | 100 | 160 | 19,901 | 3,184,360 | 9,552,580 |
+| `aim-200-2_0` | 200 | 400 | 79,801 | 31,920,800 | 95,761,400 |
 
 ## References
 
