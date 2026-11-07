@@ -28,7 +28,7 @@ def main():
                         help="write each generated formula to a DIMACS file in the current directory")
     helper.add_argument("-v", "--verbose", action="store_true", help="enable verbose output")
     helper.add_argument("-l", "--log", action="store_true", help="enable file logging")
-    helper.add_argument("--version", action="version", version="%(prog)s 0.0.4")
+    helper.add_argument("--version", action="version", version="%(prog)s 0.0.5")
     args = helper.parse_args()
 
     logger = applogger.Logger(applogger.FileLogger() if args.log else applogger.ConsoleLogger(args.verbose))

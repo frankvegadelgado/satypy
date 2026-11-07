@@ -2,12 +2,13 @@ from pathlib import Path
 
 import setuptools
 
-VERSION = "0.0.4"
+VERSION = "0.0.5"
 
 NAME = "satypy"
 
 INSTALL_REQUIRES = [
-    "siriaisa>=0.0.8",
+    "scipy>=1.15.0",
+    "networkx[default]>=3.4.2",
     "python-sat>=1.9.dev5",
 ]
 
