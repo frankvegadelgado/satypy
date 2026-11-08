@@ -393,7 +393,6 @@ test_saty -d 5 -m 12 -n 20 -r 7 -a -b -c
   Intractability*, Freeman, 1979.
 - B. Aspvall, M. F. Plass and R. E. Tarjan, *A linear-time algorithm for testing the truth of certain quantified
   Boolean formulas*, Inform. Process. Lett. 8 (1979) 121–123.
-- F. Vega, [Siriaisa 0.0.8](https://pypi.org/project/siriaisa/).
 - Y. Cai, K. Su, C. Luo and A. Sattar, *NuMVC: An efficient local search algorithm for minimum vertex cover*, J. Artif. Intell. Res. 46 (2013) 687–716.
 
 ## Implementation
