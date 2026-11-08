@@ -14,6 +14,63 @@ proved unsatisfiable, or, if `algorithm.ASSUME_SEARCH_COMPLETE` is True, at the 
 search finds such a set whenever one exists; with the assumption off (`ASSUME_SEARCH_COMPLETE = False`) the answer there is
 `UNKNOWN` (see [What Is Proved and What Is Assumed](#what-is-proved-and-what-is-assumed)).
 
+# Boolean Satisfiability (SAT) Problem
+
+**Problem:** Given a Boolean formula in Conjunctive Normal Form (CNF), is there a truth assignment that makes the formula evaluate to true?
+
+**Background:**
+
+The Boolean Satisfiability Problem (SAT) is a fundamental problem in computer science. It is known to be NP-complete, which means that any problem whose solution can be verified in polynomial time can be reduced to SAT. This implies that SAT is likely to be computationally difficult, although there is no proof of this.
+
+**Concepts:**
+
+- **Literal:** A variable or its negation (e.g., $x$ or $\neg x$).
+- **Clause:** A disjunction (OR) of one or more literals (e.g., $x \vee \neg y \vee z$).
+- **Conjunctive Normal Form (CNF):** A Boolean formula where each clause is connected by conjunction (AND).
+- **Truth Assignment:** An assignment of truth values (true or false) to all variables in a formula.
+- **Satisfying Truth Assignment:** A truth assignment that makes a formula evaluate to true.
+- **Satisfiable Formula:** A formula that has a satisfying truth assignment.
+
+**Example:**
+
+Consider the formula $(x_1 \vee ¬x_3 \vee ¬x_2) \wedge (x_3 \vee x_2 \vee x_4)$, where $\vee$ (OR), $\wedge$ (AND) and $\neg$ (NEGATION) are the logic operations. This formula is in CNF with four variables ($x_1$, $x_2$, $x_3$, and $x_4$) and two clauses. A possible satisfying truth assignment is ($x_1$: False, $x_2$: False, $x_3$: True, and $x_4$: False).
+
+**Input format:**
+
+The input for SAT solvers is typically provided in [DIMACS](https://jix.github.io/varisat/manual/0.2.0/formats/dimacs.html) format (`.cnf` files). A DIMACS file consists of three parts:
+
+1. **Header:** The first line specifies the number of variables (n) and clauses (m) in the formula using the format `p cnf n m`.
+2. **Clauses:** Each subsequent line represents a clause, where each literal is represented by a variable's index (positive for the variable, negative for its negation). A zero at the end of the line indicates the end of the clause.
+
+**Example `.cnf` file:**
+
+```
+p cnf 4 2
+1 -3 -2 0
+3 2 4 0
+```
+
+This is a `.cnf` file representing a Boolean formula in Conjunctive Normal Form (CNF) for the Boolean Satisfiability Problem (SAT). Let's break down what each line means:
+
+- **Header (p cnf 4 2):**
+
+  - `p cnf` indicates it's a CNF formula in DIMACS format.
+  - `4` specifies the number of variables in the formula ($x_1$, $x_2$, $x_3$, and $x_4$ in this case).
+  - `2` specifies the number of clauses (disjunctions of literals) in the formula.
+
+- **Clauses (1 -3 -2 0 and 3 2 4 0):**
+  - Each line represents a clause.
+  - A positive integer represents a variable (e.g., `1` represents variable $x_1$).
+  - A negative integer represents the negation of a variable (e.g., `-3` represents $\neg x_3$).
+  - `0` at the end of the line indicates the end of the clause.
+
+**Explanation of the clauses:**
+
+- `1 -3 -2 0`: This clause translates to $(x_1 \vee \neg x_3 \vee \neg x_2)$, which means at least one of $x_1$, $\neg x_3$, or $\neg x_2$ must be true for the clause to be true.
+- `3 2 4 0`: This clause translates to $(x_3 \vee x_2 \vee x_4)$, which means at least one of $x_3$, $x_2$, or $x_3$ must be true for the clause to be true.
+
+**In essence, the formula represented by this `.cnf` file is asking if there exists an assignment of truth values (true or false) to the variables $x_1$, $x_2$, $x_3$, and $x_4$ that makes both clauses true simultaneously.**
+
 ## Installation and Setup
 
 **1. Install Python:**
@@ -270,7 +327,7 @@ Write `N` for the number of variables of the residual formula and `G` for its MI
 ## Running the Experiments
 
 The folder `car/` contains three experiment scripts. All run from the repository root (or from `car/`) with or without
-SatyPy installed: they use the repository's own `satypy/`. `networkx` must be installed, and
+SatyPy installed: they use the repository's own `satypy/` (Siriaisa included). `networkx` must be installed, and
 `python-sat` for the comparison with MiniSat.
 
 **`car/small_formulas.py`** decides every formula with SatyPy and with exhaustive search over all assignments and
