@@ -173,3 +173,4 @@ cython_debug/
 # user custom
 app.log
 benchmarks/sat*
+docs/paper/
