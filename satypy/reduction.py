@@ -76,55 +76,6 @@ def reduce_sat_to_simplified_sat(clauses):
 
 
 # ===========================================================================
-# SAT -> Minimum Independent Dominating Set
-# ===========================================================================
-
-def mids_bound(num_variables, num_clauses):
-    """Least number of copies per clause vertex with bound + N > 2N * N (N variables): bound = 2N^2 - N + 1.
-
-    Every independent dominating set of the graph has N vertices (one endpoint of each edge {v, -v}, a satisfying
-    assignment) or at least bound + N > 2N^2, so on a satisfiable formula its ratio is 1 or larger than 2N = 2 i(G).
-    bound >= N + 1, as the structure and the decoding need. The number of clauses `num_clauses` does not enter; the
-    graph has n = 2N + m * bound <= 2N + 2mN^2 vertices."""
-    N = num_variables
-    return 2 * N * N - N + 1
-
-
-def reduce_sat_to_mids(clauses, max_variable):
-    """Builds the Minimum Independent Dominating Set graph for a CNF formula (clauses of any width, no
-    tautologies, variable IDs at most max_variable).
-
-    Each variable v gives the edge {v, -v}. Each clause gives `bound` = mids_bound(N, m) vertices adjacent to
-    its literals (N = number of variables, m = number of clauses); these clause vertices are numbered from
-    max_variable + 1. The graph has n = 2N + m * bound vertices and bound + N > 2N * N. The formula
-    is satisfiable iff the graph has an independent dominating set of N vertices (one endpoint of each edge
-    {v, -v}). Otherwise every independent dominating set contains all `bound` copies of some clause vertex: with
-    the copies of exactly one clause it also contains an endpoint of each edge {v, -v} (a clause holds at most one
-    of v, -v), so it has bound + N vertices; with the copies of two or more clauses it has at least
-    2 * bound >= bound + N vertices. So it has more than 2N * N vertices (ratio larger than 2N).
-
-    Returns (G, N, bound)."""
-    G = nx.Graph()
-    next_variable = max_variable + 1
-    variables = {abs(v) for clause in clauses for v in clause}
-    bound = mids_bound(len(variables), len(clauses))
-    for v in variables:
-        G.add_edge(-v, v)
-    for clause in clauses:
-        literals = set(clause)
-        for _ in range(bound):
-            G.add_edges_from((literal, next_variable) for literal in literals)
-            next_variable += 1
-    return G, len(variables), bound
-
-
-def decode_mids(independent_dominating_set, max_variable):
-    """Reads the literals of an independent dominating set: vertex v (1 <= |v| <= max_variable) is the
-    literal v set True."""
-    return {v for v in independent_dominating_set if isinstance(v, int) and 1 <= abs(v) <= max_variable}
-
-
-# ===========================================================================
 # SAT -> monotone 3SAT
 # ===========================================================================
 
@@ -291,88 +242,103 @@ def reduce_sat_to_monotone_3sat(clauses, max_variable):
 
 
 # ===========================================================================
-# Monotone 3SAT -> bipartite graph, and its linear program
+# Monotone 3SAT -> bipartite graph
 # ===========================================================================
 
 def reduce_monotone_3sat_to_bipartite(clauses):
-    """Bipartite graph of a monotone formula (every clause all positive or all negative).
+    """Bipartite graph of a monotone formula (every clause all positive or all negative), with one pair of vertices
+    per occurrence of a variable.
 
-    Side 0: the positive literals v and the clauses with only negative literals. Side 1: the negative literals -v and
-    the clauses with only positive literals. Edges: {v, -v} for each variable (attribute independent=True: exactly one
-    of its endpoints is selected), and {literal, clause} for each literal of each clause (independent=False). Literal
-    vertices keep the IDs v and -v; the clause vertices are numbered from the largest variable + 1, in the order of the
-    clauses. Node attributes: kind ("literal" or "clause"), side (0 or 1)."""
-    variables = {abs(lit) for clause in clauses for lit in clause}
+    For the variable v and each clause i (numbered from 0) that contains v there are the vertices (v, i) on side 0 and
+    (-v, i) on side 1, joined by an independent edge (attribute independent=True: exactly one of its endpoints is
+    selected). With i_1 < ... < i_k the clauses of v, the vertices of v form the cycle
+    (v, i_1) - (-v, i_1) - (v, i_2) - (-v, i_2) - ... - (-v, i_k) - (v, i_1): the independent edges alternate with the
+    edges {(-v, i_j), (v, i_{j+1})} (indices modulo k, absent when k = 1), so that the occurrences of v are all selected
+    or all unselected on the side of the positive literals. The clause i is a vertex ("clause", i) joined to (-l, i), the
+    negation of the occurrence, for each literal l of the clause: it is on side 0 if the clause is positive (the
+    vertices (-v, i) are on side 1) and on side 1 if it is negative (the vertices (v, i) are on side 0). Node
+    attributes: kind ("literal" or "clause"), side (0 or 1)."""
+    occurrences = defaultdict(list)
+    for i, clause in enumerate(clauses):
+        for lit in set(clause):
+            occurrences[abs(lit)].append(i)
     G = nx.Graph()
-    for v in sorted(variables):
-        G.add_node(v, kind="literal", side=0)
-        G.add_node(-v, kind="literal", side=1)
-        G.add_edge(v, -v, independent=True)
-    next_vertex = max(variables, default=0) + 1
-    for clause in clauses:
+    for i, clause in enumerate(clauses):
         positive = clause[0] > 0
         if any((lit > 0) != positive for lit in clause):
             raise ValueError(f"the clause {clause} is not monotone")
-        G.add_node(next_vertex, kind="clause", side=1 if positive else 0)
-        G.add_edges_from((lit, next_vertex, {"independent": False}) for lit in set(clause))
-        next_vertex += 1
+        G.add_node(("clause", i), kind="clause", side=0 if positive else 1)
+    for v in sorted(occurrences):
+        indices = occurrences[v]
+        for i in indices:
+            G.add_node((v, i), kind="literal", side=0)
+            G.add_node((-v, i), kind="literal", side=1)
+            G.add_edge((v, i), (-v, i), independent=True)
+        if len(indices) > 1:
+            for position, i in enumerate(indices):
+                G.add_edge((-v, i), (v, indices[(position + 1) % len(indices)]), independent=False)
+    for i, clause in enumerate(clauses):
+        G.add_edges_from(((-lit, i), ("clause", i), {"independent": False}) for lit in set(clause))
     return G
 
 
-def bipartite_weights(G, clause_weight=1.0, literal_weight=0.0):
-    """Weight of every vertex of the bipartite graph: `clause_weight` for the clause vertices and `literal_weight`
-    for the literal vertices (a dict vertex -> weight; any dict with a weight per vertex can be given to
-    solve_bipartite_lp instead)."""
-    return {v: clause_weight if data["kind"] == "clause" else literal_weight for v, data in G.nodes(data=True)}
+# ===========================================================================
+# Monotone 3SAT -> Minimum Independent Dominating Set
+# ===========================================================================
+
+def mids_bound(num_variables, num_occurrences):
+    """Number of copies of each clause vertex: bound = 2 * N * L + 1, with N the variables and L the occurrence
+    pairs of a monotone formula (L = the vertex pairs (v, i), (-v, i) of reduce_monotone_3sat_to_mids).
+
+    A satisfiable formula has an independent dominating set of L vertices, and an independent dominating set
+    with a clause vertex has all `bound` copies of it, so its ratio to L is larger than 2N."""
+    return 2 * num_variables * num_occurrences + 1
 
 
-def solve_bipartite_lp(G, weights=None):
-    """Linear program on the bipartite graph, with real variables 0 <= x_v <= 1:
+def reduce_monotone_3sat_to_mids(clauses, copies=None):
+    """Minimum Independent Dominating Set graph of a monotone formula (clauses with literals of one sign).
 
-        minimize    sum of weight[v] * x_v
-        subject to  x_u + x_v = 1   for every independent edge {v, -v},
-                    x_u + x_v >= 1  for every other edge {literal, clause}.
+    The occurrences of each variable v form the even cycle of reduce_monotone_3sat_to_bipartite: the vertices
+    (v, i) and (-v, i) of every clause i that contains v, the independence edges {(v, i), (-v, i)} and the links
+    {(-v, i_j), (v, i_{j+1})}. Each clause i is replaced by `copies` vertices ("clause", i, c), c = 0, ..., copies - 1
+    (by default `copies` = mids_bound(N, L)), each adjacent to the vertices (l, i) of the literals l of the clause.
+    With copies = 1 the maximum degree of the graph is 3. The graph is
+    bipartite (side 0: the vertices (v, i) and the copies of negative clauses; side 1: the vertices (-v, i) and
+    the copies of positive clauses).
 
-    The constraint matrix is the vertex-edge incidence matrix of a bipartite graph (totally unimodular), so the
-    optimum is attained at an integral point. `weights` defaults to bipartite_weights(G). Needs scipy.
+    If a formula is satisfiable, the vertices (l, i) of its true literals l form an independent dominating set of L
+    vertices (one of the two alternating sets of each cycle, and every clause copy has a true literal). An
+    independent dominating set that holds a copy of a clause vertex holds all its copies (they have the same
+    neighbours), so it has at least `copies` vertices.
 
-    Returns (value, x) with x a dict vertex -> value, or (None, None) if the solver does not find an optimum."""
-    import numpy as np  # noqa: PLC0415  (only needed by the linear program)
-    from scipy.optimize import linprog  # noqa: PLC0415
-    from scipy.sparse import csr_matrix  # noqa: PLC0415
-
-    weights = bipartite_weights(G) if weights is None else weights
-    vertices = list(G.nodes)
-    index = {v: i for i, v in enumerate(vertices)}
-    equality_rows, equality_cols, cover_rows, cover_cols = [], [], [], []
-    equalities = covers = 0
-    for u, v, data in G.edges(data=True):
-        if data["independent"]:
-            equality_rows += [equalities, equalities]
-            equality_cols += [index[u], index[v]]
-            equalities += 1
-        else:
-            cover_rows += [covers, covers]
-            cover_cols += [index[u], index[v]]
-            covers += 1
-    n = len(vertices)
-    result = linprog(
-        c=np.array([weights[v] for v in vertices], dtype=float),
-        A_ub=csr_matrix((-np.ones(len(cover_rows)), (cover_rows, cover_cols)), shape=(covers, n)) if covers else None,
-        b_ub=-np.ones(covers) if covers else None,
-        A_eq=csr_matrix((np.ones(len(equality_rows)), (equality_rows, equality_cols)), shape=(equalities, n))
-        if equalities else None,
-        b_eq=np.ones(equalities) if equalities else None,
-        bounds=(0, 1), method="highs")
-    if result.status != 0:
-        return None, None
-    return float(result.fun), {v: float(result.x[index[v]]) for v in vertices}
+    Returns (G, N, L, copies)."""
+    G = reduce_monotone_3sat_to_bipartite(clauses)
+    G.remove_nodes_from([vertex for vertex, data in G.nodes(data=True) if data["kind"] == "clause"])
+    variables = {abs(lit) for clause in clauses for lit in clause}
+    occurrences = G.number_of_nodes() // 2
+    bound = mids_bound(len(variables), occurrences) if copies is None else copies
+    for i, clause in enumerate(clauses):
+        side = 1 if clause[0] > 0 else 0
+        for copy in range(bound):
+            vertex = ("clause", i, copy)
+            G.add_node(vertex, kind="clause", side=side)
+            G.add_edges_from((vertex, (lit, i)) for lit in set(clause))
+    return G, len(variables), occurrences, bound
 
 
-def decode_bipartite_lp(G, x, tolerance=1e-6):
-    """Literals with x = 1 in a solution of solve_bipartite_lp, as a set of non-zero integers, and whether all the
-    values are integral (within `tolerance`). With an integral solution it holds exactly one of v, -v for every
-    variable v."""
-    integral = all(min(value, 1 - value) <= tolerance for value in x.values())
-    literals = {v for v, data in G.nodes(data=True) if data["kind"] == "literal" and x[v] > 1 - tolerance}
-    return literals, integral
+def decode_mids(independent_dominating_set, max_variable):
+    """Literals of an independent dominating set: the literal l of each vertex (l, i) with 1 <= |l| <= max_variable;
+    a variable that appears with both signs is left out."""
+    literals = {vertex[0] for vertex in independent_dominating_set
+                if len(vertex) == 2 and isinstance(vertex[0], int) and 1 <= abs(vertex[0]) <= max_variable}
+    return {lit for lit in literals if -lit not in literals}
+
+
+def mids_variable_groups(G):
+    """The vertices (l, i) of each variable of a graph of reduce_monotone_3sat_to_mids: the even cycle (or the single
+    edge) of the variable. Returns a dict variable -> list of vertices."""
+    groups = defaultdict(list)
+    for vertex, data in G.nodes(data=True):
+        if data["kind"] == "literal":
+            groups[abs(vertex[0])].append(vertex)
+    return dict(groups)

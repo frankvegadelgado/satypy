@@ -80,7 +80,7 @@ def sat_solver(inputFile, verbose=False, timed=False, log=False, bruteForce=Fals
     else:
         utils.println("Solving the problem done", logger)
 
-    # Output the solution, preceded by DIMACS comment lines on what the MIDS stage found
+    # Output the solution, preceded by DIMACS comment lines on what the deciding stage found
     for comment in stats.get("comments", []):
         utils.output(f"{filename}: {comment}" if comparing else comment, logger, verbose or log)
     result = utils.string_result_format(satisfiability, answer, count)
