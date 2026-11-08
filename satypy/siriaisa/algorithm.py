@@ -586,7 +586,7 @@ def final_candidates(
 
 
 def find_independent_dominating_set(graph: nx.Graph, forbidden: Optional[Iterable[Any]] = None,
-                                    info: Optional[dict] = None) -> Set[Any]:
+                                    info: Optional[dict] = None, effort: float = 1.0) -> Set[Any]:
     """
     Approximate MIDS with the Siriaisa 0.0.8 ensemble (``c18``, the smallest refined
     candidate), in ``O((n + m) alpha(n))`` time.
@@ -597,7 +597,7 @@ def find_independent_dominating_set(graph: nx.Graph, forbidden: Optional[Iterabl
     :mod:`siriaisa.forbidden_search`: the result is an independent set without forbidden vertices that leaves fewest
     vertices undominated among those met by the search. It is an independent dominating set exactly when
     ``info["undominated"]`` is 0 (``info``, an optional dict, receives ``undominated``, ``steps`` and ``work``); such a
-    set need not exist.
+    set need not exist. ``effort`` multiplies the work of the search.
     """
     if forbidden is None:
         return final_candidates(graph)[FINAL_NAME]
@@ -607,7 +607,7 @@ def find_independent_dominating_set(graph: nx.Graph, forbidden: Optional[Iterabl
     if not banned <= set(nodes):
         raise ValueError("forbidden must hold vertices of the graph.")
     blocked = [v in banned for v in nodes]
-    found = forbidden_search.forbidden_search(adj, blocked, info=info)
+    found = forbidden_search.forbidden_search(adj, blocked, effort=effort, info=info)
     return {nodes[i] for i, flag in enumerate(found) if flag}
 
 

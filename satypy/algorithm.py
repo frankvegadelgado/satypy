@@ -121,7 +121,10 @@ def solve(formula, logger=None, stats=None, branch_depth=None):
     if branch_depth is None:
         branch_depth = default_branch_depth(formula)
     stats["branch_depth"] = branch_depth
-    satisfiability, answer = _solve(formula, logger, stats, branch_depth)
+    width = max(3, max((len(clause) for clause in formula), default=3))
+    runs = sum(width ** level for level in range(branch_depth + 1))   # searches of the whole branching, at most
+    effort = max(1 + 2 * branch_depth, -(-runs // 10))
+    satisfiability, answer = _solve(formula, logger, stats, branch_depth, effort)
     if satisfiability is True:
         if answer is None:
             return None, None
@@ -133,7 +136,7 @@ def solve(formula, logger=None, stats=None, branch_depth=None):
     return satisfiability, answer
 
 
-def _solve(formula, logger, stats, branch_depth):
+def _solve(formula, logger, stats, branch_depth, effort=1):
     """Decide a CNF formula given as a list of clauses (lists of non-zero integers; variable IDs
     need not be 1..n, contiguous or sorted).
 
@@ -145,6 +148,9 @@ def _solve(formula, logger, stats, branch_depth):
        its forbidden vertices) looks for an independent set without clause vertices that dominates every vertex: its
        vertices are then one literal per variable (the independence edge) and every clause vertex is dominated by a
        literal, so those literals satisfy the formula, and conversely every satisfying assignment gives such a set.
+       The search runs with effort max(1 + 2d, R / 10) at the top level (d the branching depth, R the number of searches
+       that the whole branching runs at most; the top-level search runs once) and 1 on every branch, so the extra
+       work is at most a tenth of the work of the branching.
        - the search dominates every vertex: its literals are an assignment, which is verified (SATISFIABLE); if it
          does not satisfy the formula the answer is UNKNOWN;
        - otherwise, if branch_depth > 0, the formula is split on a shortest clause C falsified by the literals of the
@@ -212,7 +218,7 @@ def _solve(formula, logger, stats, branch_depth):
     started = time.time()
     clause_vertices = {vertex for vertex in graph if vertex[0] == "clause"}
     search = {}
-    found = find_independent_dominating_set(graph, forbidden=clause_vertices, info=search)
+    found = find_independent_dominating_set(graph, forbidden=clause_vertices, info=search, effort=effort)
     unsatisfied = search["undominated"]
     size = len(found)
     stats.update(mids_seconds=time.time() - started, mids_size=size, mids_unsatisfied=unsatisfied)

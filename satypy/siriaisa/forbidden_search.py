@@ -27,7 +27,8 @@ vertices that the eviction of the neighbours of ``z`` in ``S`` leaves undominate
 probability :data:`NOISE` a random candidate is taken instead. After every step the weight of every undominated vertex
 grows by one, so that violations that persist become more important; the weights are halved when their mean exceeds
 :data:`WEIGHT_LIMIT`. Every adjacency scan is charged to a work counter and the search stops at
-``max(budget * (n + m), floor)`` units, so for fixed ``budget`` and ``floor`` it runs in ``O(n + m)`` time.
+``effort * max(budget * (n + m), floor)`` units (``effort`` is 1 unless the caller asks for more), so for fixed
+``budget``, ``floor`` and ``effort`` it runs in ``O(n + m)`` time.
 """
 
 from __future__ import annotations
@@ -49,14 +50,14 @@ WEIGHT_LIMIT: float = 50.0
 
 def forbidden_search(adj: List[List[int]], blocked: Sequence[bool], budget: float = DEFAULT_BUDGET,
                      seed: int = DEFAULT_SEED, floor: int = DEFAULT_FLOOR,
-                     info: Optional[Dict] = None) -> List[bool]:
+                     effort: float = 1.0, info: Optional[Dict] = None) -> List[bool]:
     """The membership list of an independent set of the index graph ``adj`` without vertices ``v`` with
     ``blocked[v]`` true, that leaves fewest vertices undominated among those met by the search (zero if it finds an
     independent dominating set). ``info`` (optional dict) receives ``undominated``, ``steps`` and ``work``."""
     n = len(adj)
     rng = random.Random(seed)
     m = sum(len(a) for a in adj) // 2
-    limit = max(budget * (n + m), floor)
+    limit = effort * max(budget * (n + m), floor)
     work = n + 2 * m
 
     # --- start: a random maximal independent set among the allowed vertices ---

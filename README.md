@@ -220,7 +220,7 @@ Variable IDs may be any positive integers (not necessarily `1..n`, contiguous, o
    literal); with probability 0.02 a random candidate is taken instead. After every step the weight of every undominated
    vertex grows by one (halved when the mean exceeds 50), and the work is bounded by `max(50(n + m), 400000)` units, so
    the search is linear for fixed parameters. It returns the independent set with fewest undominated vertices that it met;
-   the set is a dominating set exactly when it leaves none. Then:
+   the set is a dominating set exactly when it leaves none. The search of the formula given to `solve` (which runs once) gets `max(1 + 2d, R/10)` times that work, `d` being the branching depth and `R` the number of searches that the whole branching runs at most (so the extra work is at most a tenth of the work of the branching); the searches of the branches get the work above. Then:
    - if it leaves no vertex undominated, `reduction.decode_mids` reads the literals of its vertices; the completed
      assignment is verified against the input (`s SATISFIABLE`), and if it does not satisfy the formula the answer is
      `s UNKNOWN`;
