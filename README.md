@@ -1,11 +1,11 @@
-# SatyPy: SAT Solver through Minimum Independent Dominating Set
+# SatyPy: SAT Solver through Minimum Dominating Set
 
 ![SatyPy: SAT Solver](docs/satypy.png)
 
 This work builds upon [SatyPy: SAT Solver](https://github.com/frankvegadelgado/satypy).
 
-SatyPy decides Boolean formulas in CNF by reducing them to **Minimum Independent Dominating Set** (MIDS) through a
-**monotone 3SAT** formula whose variable occurrences form even cycles. The MIDS graph is bipartite with maximum degree 3.
+SatyPy decides Boolean formulas in CNF by reducing them to **Minimum Dominating Set** (MDS) through a
+**monotone 3SAT** formula whose variable occurrences form even cycles. The MDS graph is bipartite with maximum degree 3.
 The colour classes of the cycles give a *colour-forced* independent dominating set, improved by flipping cycles; it can
 start from the first colour class of every cycle or from the dominating set of the graph computed by Furones (the
 package `furones`, version 0.3.9 or later) and improved by a weighted swap search, as `algorithm.STARTS` says. Every `SATISFIABLE`
@@ -121,9 +121,9 @@ SatyPy prints its answer in the DIMACS output format.
   colour-forced set is unsatisfiable, or, at the deepest level, when the colour-forced set holds a clause vertex and
   `algorithm.ASSUME_COLOUR_OPTIMAL` is True (the default; this answer is an assumption, not a proof).
 
-- **Comment lines:** before the answer, SatyPy prints DIMACS comment lines (`c ...`) that report what the MIDS stage
+- **Comment lines:** before the answer, SatyPy prints DIMACS comment lines (`c ...`) that report what the MDS stage
   found and, when the formula is decided, a line `c decided by: ...` naming the stage that decided it (empty clause,
-  simplification, 2-SAT, MIDS graph, branching, or MIDS graph under the assumption).
+  simplification, 2-SAT, MDS graph, branching, or MDS graph under the assumption).
 
 - **Undecided:** `s UNKNOWN`, preceded by the comment lines. It is printed when the assignment of a colour-forced set
   without clause vertices does not satisfy the formula, or, only with `ASSUME_COLOUR_OPTIMAL = False`, when the colour-forced
@@ -273,7 +273,7 @@ Variable IDs may be any positive integers (not necessarily `1..n`, contiguous, o
    place of its own sign; if its sign does not fit, its variable `x` gets one complement variable `x'`, shared by all the
    clauses, with the clause `(¬x ∨ ¬x')` or `(x ∨ x')` (each only if it is used). The first sign and `e` are chosen to
    need the fewest new variables.
-5. **Reduction to MIDS** (`reduction.reduce_monotone_3sat_to_mids` with one vertex per clause): with `L` the number of
+5. **Reduction to MDS** (`reduction.reduce_monotone_3sat_to_mds` with one vertex per clause): with `L` the number of
    pairs `(v, i)` (the occurrences) of the monotone formula, for each variable `v` and each clause `i` that contains `v`
    there are the vertices `(v, i)` and `(¬v, i)`, joined by an *independence edge*. With `i_1 < … < i_k` the clauses of
    `v`, an edge joins `(¬v, i_j)` and `(v, i_{j+1})` (indices modulo `k`, none if `k = 1`), so the vertices of `v` form
@@ -297,7 +297,7 @@ Variable IDs may be any positive integers (not necessarily `1..n`, contiguous, o
    vertex dominates and flips the adjacent cycle that increases the size least (a random one with probability 0.2),
    forbidding the flipped cycle for 10 steps, and keeps the smallest set found. The
    set has `L` vertices plus one per clause that has no true literal under the assignment it defines, and:
-   - if it holds no clause vertex, `reduction.decode_mids` reads the literals `l` of its vertices `(l, i)`; the completed
+   - if it holds no clause vertex, `reduction.decode_mds` reads the literals `l` of its vertices `(l, i)`; the completed
      assignment is verified against the input (`s SATISFIABLE`), and if it does not satisfy the formula the answer is
      `s UNKNOWN`;
    - otherwise step 7 runs.
@@ -318,7 +318,7 @@ branching. Use `-l` to see each stage in `app.log`.
 
 ## What Is Proved and What Is Assumed
 
-Write `L` for the occurrence pairs `(v, i)` of the monotone formula, `G` for its MIDS graph (one vertex per clause), `n`
+Write `L` for the occurrence pairs `(v, i)` of the monotone formula, `G` for its MDS graph (one vertex per clause), `n`
 for its vertices and `i(G)` for the size of a minimum independent dominating set.
 
 **Proved.**
@@ -340,7 +340,7 @@ for its vertices and `i(G)` for the size of a minimum independent dominating set
   `|S| / i(G) ≤ 4` for every independent dominating set `S`.
 - *The answers.* Every `SATISFIABLE` answer carries a checked assignment. `UNSATISFIABLE` comes from the exact stages
   1–3, from branching when every branch is unsatisfiable, or, at depth 0, from the assumption below.
-- *Branching.* Splitting on a clause is exact, and branching to depth `d` runs the MIDS stage at most
+- *Branching.* Splitting on a clause is exact, and branching to depth `d` runs the MDS stage at most
   `1 + w + … + w^d` times (`w` the largest clause width). With `d = max(2, ⌊log₃(m + n)⌋)` and `w = 3` that is
   `(3^(d+1) − 1)/2 ≤ max(13, 3(m + n)/2)` runs.
 
@@ -381,7 +381,7 @@ python car/small_formulas.py --no-files --width 4
 | `-o FILE` | output CSV (`car/small_formulas_results.csv`) |
 
 For each formula it prints and writes the expected answer, SatyPy's answer, whether it is correct, the deciding stage,
-and, for the formulas that reach the MIDS graph, its vertices, edges, maximum degree, the size of the colour-forced set and the number of clause vertices in it. The summary counts correct,
+and, for the formulas that reach the MDS graph, its vertices, edges, maximum degree, the size of the colour-forced set and the number of clause vertices in it. The summary counts correct,
 wrong and unknown answers and lists every wrong one.
 
 **`car/medium_formulas.py`** and **`car/large_formulas.py`** compare SatyPy with MiniSat 2.2 (python-sat) on random
@@ -406,7 +406,7 @@ python car/large_formulas.py --variables 100 200 --ratios 4.27 --repeat 3 --refe
 | `-o FILE` | output CSV (`car/medium_formulas_results.csv`, `car/large_formulas_results.csv`) |
 
 For each formula they print and write MiniSat's answer, SatyPy's answer and its correctness, the deciding stage, the
-vertices of the MIDS graph, the size of the colour-forced set, the clause vertices in it and both running times.
+vertices of the MDS graph, the size of the colour-forced set, the clause vertices in it and both running times.
 
 **`car/monotone_bipartite.py`** checks the reduction of a CNF formula to monotone 3SAT
 (`reduction.reduce_sat_to_monotone_3sat`) and the bipartite occurrence graph of maximum degree 3 built from it

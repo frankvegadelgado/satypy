@@ -13,12 +13,12 @@ from . import reduction, utils
 #: set holds a clause vertex only if the descent found no assignment that satisfies every clause). With False the
 #: answer there is UNKNOWN, so that UNSATISFIABLE is printed only when it is proved. With True (the default) the
 #: UNSATISFIABLE of that stage is an assumption, not a proof: the descent may miss an assignment (the comment line
-#: "c decided by" and the stage "mids (assumption)" say so).
+#: "c decided by" and the stage "mds (assumption)" say so).
 ASSUME_COLOUR_OPTIMAL = True
 
 #: Starting points of the colour-forced set, tried in this order; the set with fewest clause vertices is kept and the
 #: search stops at a set without clause vertices. "none": every cycle starts with its first colour class;
-#: "furones": the dominating set of the MIDS graph computed by Furones (the package furones; independence is only needed
+#: "furones": the dominating set of the MDS graph computed by Furones (the package furones; independence is only needed
 #: inside the cycles, and the colour classes provide it). A start gives each cycle the colour class that holds more of
 #: its vertices.
 STARTS = ("none", "furones")
@@ -162,7 +162,7 @@ def _solve(formula, logger, stats, branch_depth):
     1. reduce_sat_to_simplified_sat: unit propagation and pure literals (UNSAT on conflicts);
     2. residual 2-SAT: solved exactly by _solve_two_sat;
     3. otherwise reduce_sat_to_monotone_3sat (the residual formula -> an equisatisfiable monotone formula with N
-       variables and L occurrence pairs) and reduce_monotone_3sat_to_mids with one vertex per clause (a bipartite
+       variables and L occurrence pairs) and reduce_monotone_3sat_to_mds with one vertex per clause (a bipartite
        graph of maximum degree 3 in which the occurrences of each variable form an even cycle whose edges are the
        independence edges and the links). The colour-forced set F (coloured) starts from each of STARTS
        (the first colour class of every cycle, the dominating set of Furones improved by furones.improve)
@@ -230,14 +230,14 @@ def _solve(formula, logger, stats, branch_depth):
         return (True, checked) if ok else (None, None)
 
     monotone, info = reduction.reduce_sat_to_monotone_3sat(clauses, max_variable)
-    graph, num_variables, occurrences, _ = reduction.reduce_monotone_3sat_to_mids(monotone, copies=1)
+    graph, num_variables, occurrences, _ = reduction.reduce_monotone_3sat_to_mds(monotone, copies=1)
     degree = max(d for _, d in graph.degree)
-    log(f"MIDS instance: {graph.number_of_nodes()} vertices, {graph.number_of_edges()} edges, maximum degree {degree}, "
+    log(f"MDS instance: {graph.number_of_nodes()} vertices, {graph.number_of_edges()} edges, maximum degree {degree}, "
         f"{num_variables} variables and {occurrences} occurrence pairs of the monotone formula")
-    stats.update(mids_vertices=graph.number_of_nodes(), mids_edges=graph.number_of_edges(), mids_max_degree=degree,
-                 mids_target=occurrences)
+    stats.update(mds_vertices=graph.number_of_nodes(), mds_edges=graph.number_of_edges(), mds_max_degree=degree,
+                 mds_target=occurrences)
     started = time.time()
-    groups = list(reduction.mids_variable_groups(graph).values())
+    groups = list(reduction.mds_variable_groups(graph).values())
     forced, unsatisfied, best_start = None, None, ""
     for name in STARTS:
         candidate = colour_forced_independent_dominating_set(graph, groups, _start_set(graph, name, IMPROVE_START and "branch_depth" in stats))
@@ -248,21 +248,21 @@ def _solve(formula, logger, stats, branch_depth):
         if unsatisfied == 0:
             break
     size = len(forced)
-    stats.update(mids_seconds=time.time() - started, mids_size=size, mids_start=best_start,
-                 mids_unsatisfied=unsatisfied)
+    stats.update(mds_seconds=time.time() - started, mds_size=size, mds_start=best_start,
+                 mds_unsatisfied=unsatisfied)
     log(f"Colour-forced set: {size} vertices, {unsatisfied} clause vertices (L = {occurrences}, start {best_start})")
 
-    literals = reduction.decode_mids(forced, max_variable)
+    literals = reduction.decode_mds(forced, max_variable)
     if unsatisfied == 0:
         ok, full = check(formula, solution, literals)
         if ok:
-            log("MIDS: decoded assignment verified")
-            stats["stage"] = "mids"
-            stats["comments"].append(f"c decided by: MIDS graph (colour-forced set of L = {occurrences} vertices)")
+            log("MDS: decoded assignment verified")
+            stats["stage"] = "mds"
+            stats["comments"].append(f"c decided by: MDS graph (colour-forced set of L = {occurrences} vertices)")
             return True, full
-        log("MIDS: the decoded assignment does not satisfy the formula")
-        stats["stage"] = "mids (undecided)"
-        stats["comments"].append(f"c MIDS graph: {graph.number_of_nodes()} vertices; the decoded assignment does "
+        log("MDS: the decoded assignment does not satisfy the formula")
+        stats["stage"] = "mds (undecided)"
+        stats["comments"].append(f"c MDS graph: {graph.number_of_nodes()} vertices; the decoded assignment does "
                                  f"not satisfy the formula")
         return None, None
 
@@ -271,13 +271,13 @@ def _solve(formula, logger, stats, branch_depth):
         if decided is not None:
             return decided
     if ASSUME_COLOUR_OPTIMAL:
-        log("MIDS: the colour-forced set holds clause vertices")
-        stats["stage"] = "mids (assumption)"
-        stats["comments"].append(f"c decided by: MIDS graph under the assumption that the colour-forced set is "
+        log("MDS: the colour-forced set holds clause vertices")
+        stats["stage"] = "mds (assumption)"
+        stats["comments"].append(f"c decided by: MDS graph under the assumption that the colour-forced set is "
                                  f"minimum (it has {unsatisfied} clause vertices, L = {occurrences})")
         return False, None
-    stats["stage"] = "mids (undecided)"
-    stats["comments"].append(f"c MIDS graph: the colour-forced set holds {unsatisfied} clause vertices")
+    stats["stage"] = "mds (undecided)"
+    stats["comments"].append(f"c MDS graph: the colour-forced set holds {unsatisfied} clause vertices")
     return None, None
 
 
@@ -295,14 +295,14 @@ def _branch(formula, clauses, solution, literals, unsatisfied, logger, stats, br
     if not falsified:
         ok, full = check(formula, solution, completed)
         if ok:
-            stats["stage"] = "mids (decoded)"
-            stats["comments"].append("c decided by: MIDS graph (the literals of the colour-forced set satisfy the "
+            stats["stage"] = "mds (decoded)"
+            stats["comments"].append("c decided by: MDS graph (the literals of the colour-forced set satisfy the "
                                      "formula)")
             return True, full
         return None
     clause = min(falsified, key=len)
     if logger is not None:
-        utils.println(f"MIDS: the colour-forced set holds {unsatisfied} clause vertices; its literals falsify "
+        utils.println(f"MDS: the colour-forced set holds {unsatisfied} clause vertices; its literals falsify "
                       f"{len(falsified)}; branching on {sorted(clause, key=abs)}", logger)
     undecided = False
     for lit in sorted(clause, key=abs):
@@ -311,7 +311,7 @@ def _branch(formula, clauses, solution, literals, unsatisfied, logger, stats, br
         if satisfiability is True:
             ok, full = check(formula, solution, set(answer))
             if ok:
-                stats["stage"] = "mids (branching)"
+                stats["stage"] = "mds (branching)"
                 stats["comments"].append(f"c decided by: branching on the clause {sorted(clause, key=abs)} falsified "
                                          f"by the colour-forced set (branch {lit}: {branch_stats.get('stage', '')})")
                 return True, full
@@ -320,7 +320,7 @@ def _branch(formula, clauses, solution, literals, unsatisfied, logger, stats, br
             undecided = True
     if undecided:
         return None
-    stats["stage"] = "mids (branching)"
+    stats["stage"] = "mds (branching)"
     stats["comments"].append(f"c decided by: branching on the clause {sorted(clause, key=abs)} falsified by the "
                              f"colour-forced set (every branch unsatisfiable)")
     return False, None

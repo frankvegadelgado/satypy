@@ -283,25 +283,25 @@ def reduce_monotone_3sat_to_bipartite(clauses):
 
 
 # ===========================================================================
-# Monotone 3SAT -> Minimum Independent Dominating Set
+# Monotone 3SAT -> Minimum Dominating Set
 # ===========================================================================
 
-def mids_bound(num_variables, num_occurrences):
+def mds_bound(num_variables, num_occurrences):
     """Number of copies of each clause vertex: bound = 2 * N * L + 1, with N the variables and L the occurrence
-    pairs of a monotone formula (L = the vertex pairs (v, i), (-v, i) of reduce_monotone_3sat_to_mids).
+    pairs of a monotone formula (L = the vertex pairs (v, i), (-v, i) of reduce_monotone_3sat_to_mds).
 
     A satisfiable formula has an independent dominating set of L vertices, and an independent dominating set
     with a clause vertex has all `bound` copies of it, so its ratio to L is larger than 2N."""
     return 2 * num_variables * num_occurrences + 1
 
 
-def reduce_monotone_3sat_to_mids(clauses, copies=None):
-    """Minimum Independent Dominating Set graph of a monotone formula (clauses with literals of one sign).
+def reduce_monotone_3sat_to_mds(clauses, copies=None):
+    """Minimum Dominating Set graph of a monotone formula (clauses with literals of one sign).
 
     The occurrences of each variable v form the even cycle of reduce_monotone_3sat_to_bipartite: the vertices
     (v, i) and (-v, i) of every clause i that contains v, the independence edges {(v, i), (-v, i)} and the links
     {(-v, i_j), (v, i_{j+1})}. Each clause i is replaced by `copies` vertices ("clause", i, c), c = 0, ..., copies - 1
-    (by default `copies` = mids_bound(N, L)), each adjacent to the vertices (l, i) of the literals l of the clause.
+    (by default `copies` = mds_bound(N, L)), each adjacent to the vertices (l, i) of the literals l of the clause.
     With copies = 1 the maximum degree of the graph is 3. The graph is
     bipartite (side 0: the vertices (v, i) and the copies of negative clauses; side 1: the vertices (-v, i) and
     the copies of positive clauses).
@@ -316,7 +316,7 @@ def reduce_monotone_3sat_to_mids(clauses, copies=None):
     G.remove_nodes_from([vertex for vertex, data in G.nodes(data=True) if data["kind"] == "clause"])
     variables = {abs(lit) for clause in clauses for lit in clause}
     occurrences = G.number_of_nodes() // 2
-    bound = mids_bound(len(variables), occurrences) if copies is None else copies
+    bound = mds_bound(len(variables), occurrences) if copies is None else copies
     for i, clause in enumerate(clauses):
         side = 1 if clause[0] > 0 else 0
         for copy in range(bound):
@@ -326,7 +326,7 @@ def reduce_monotone_3sat_to_mids(clauses, copies=None):
     return G, len(variables), occurrences, bound
 
 
-def decode_mids(independent_dominating_set, max_variable):
+def decode_mds(independent_dominating_set, max_variable):
     """Literals of an independent dominating set: the literal l of each vertex (l, i) with 1 <= |l| <= max_variable;
     a variable that appears with both signs is left out."""
     literals = {vertex[0] for vertex in independent_dominating_set
@@ -334,8 +334,8 @@ def decode_mids(independent_dominating_set, max_variable):
     return {lit for lit in literals if -lit not in literals}
 
 
-def mids_variable_groups(G):
-    """The vertices (l, i) of each variable of a graph of reduce_monotone_3sat_to_mids: the even cycle (or the single
+def mds_variable_groups(G):
+    """The vertices (l, i) of each variable of a graph of reduce_monotone_3sat_to_mds: the even cycle (or the single
     edge) of the variable. Returns a dict variable -> list of vertices."""
     groups = defaultdict(list)
     for vertex, data in G.nodes(data=True):

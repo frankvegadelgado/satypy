@@ -1,13 +1,13 @@
 # Experiment: satypy on medium-size random CNF formulas (tens to hundreds of variables).
 #
-# Every formula is decided by satypy (algorithm.solve: simplification, 2-SAT, or the bipartite MIDS graph of maximum degree 3 decided by the
+# Every formula is decided by satypy (algorithm.solve: simplification, 2-SAT, or the bipartite MDS graph of maximum degree 3 decided by the
 # colour-forced set, with branching) and by MiniSat (python-sat) as the reference, and the answers are compared. The
 # formulas are random k-CNF formulas with `variables` variables and round(ratio * variables) clauses
 # (utils.random_formula); the ratios around 4.27 are the hard region of random 3-SAT, where both outcomes appear.
 # MiniSat runs with a conflict budget (--reference-conflicts); when it does not finish, the formula has no reference
 # answer and satypy's answer is only checked for consistency (a SAT answer is always verified against the formula).
 #
-# For each formula it reports the stage that decided it, the MIDS graph (vertices, edges, maximum degree), the size of
+# For each formula it reports the stage that decided it, the MDS graph (vertices, edges, maximum degree), the size of
 # the colour-forced independent dominating set, the clause vertices in it (unsat) and the time of satypy and of MiniSat.
 #
 # Works with satypy installed or not: the repository's own code is used (networkx and python-sat must be
@@ -32,8 +32,8 @@ if REPO not in sys.path:
 
 from satypy import algorithm, utils  # noqa: E402
 
-COLUMNS = ["name", "variables", "clauses", "ratio", "reference", "answer", "correct", "stage", "mids_vertices",
-           "mids_edges", "mids_max_degree", "mids_unsatisfied", "mids_size", "satypy_seconds",
+COLUMNS = ["name", "variables", "clauses", "ratio", "reference", "answer", "correct", "stage", "mds_vertices",
+           "mds_edges", "mds_max_degree", "mds_unsatisfied", "mds_size", "satypy_seconds",
            "reference_seconds"]
 
 
@@ -66,7 +66,7 @@ def run(name, formula, ratio, conflicts):
            "correct": "unknown" if correct is None else ("yes" if correct else "NO"),
            "stage": stats.get("stage", ""), "satypy_seconds": f"{satypy_seconds:.3f}",
            "reference_seconds": f"{reference_seconds:.3f}"}
-    for key in ("mids_vertices", "mids_edges", "mids_max_degree", "mids_unsatisfied", "mids_size"):
+    for key in ("mds_vertices", "mds_edges", "mds_max_degree", "mds_unsatisfied", "mds_size"):
         if key in stats:
             row[key] = stats[key]
     return row
@@ -100,8 +100,8 @@ def benchmark(defaults, default_output):
                 row = run(name, formula, ratio, args.reference_conflicts)
                 rows.append(row)
                 print(f"{name:<34}{row['variables']:>6}{row['clauses']:>7} {row['reference']:<8} {row['answer']:<8} "
-                      f"{row['correct']:<8} {row['stage']:<26}{row.get('mids_vertices', ''):>9}"
-                      f"{row.get('mids_size', ''):>8}{row['satypy_seconds']:>10}{row['reference_seconds']:>8}",
+                      f"{row['correct']:<8} {row['stage']:<26}{row.get('mds_vertices', ''):>9}"
+                      f"{row.get('mds_size', ''):>8}{row['satypy_seconds']:>10}{row['reference_seconds']:>8}",
                       flush=True)
 
     with open(args.output, "w", newline="") as handle:
@@ -112,7 +112,7 @@ def benchmark(defaults, default_output):
     def count(predicate):
         return sum(1 for row in rows if predicate(row))
 
-    cut = [row for row in rows if str(row["stage"]).startswith("mids")]
+    cut = [row for row in rows if str(row["stage"]).startswith("mds")]
     print()
     print(f"formulas: {len(rows)} (MiniSat: SAT {count(lambda r: r['reference'] == 'SAT')}, "
           f"UNSAT {count(lambda r: r['reference'] == 'UNSAT')}, no answer {count(lambda r: r['reference'] == 'unknown')})")
@@ -120,7 +120,7 @@ def benchmark(defaults, default_output):
           f"UNKNOWN {count(lambda r: r['answer'] == 'UNKNOWN')}")
     print(f"correct: {count(lambda r: r['correct'] == 'yes')}, wrong: {count(lambda r: r['correct'] == 'NO')}, "
           f"unchecked: {count(lambda r: r['correct'] == 'unknown')}")
-    print(f"reached the MIDS graph: {len(cut)}; of those, MiniSat SAT {count(lambda r: r in cut and r['reference'] == 'SAT')}"
+    print(f"reached the MDS graph: {len(cut)}; of those, MiniSat SAT {count(lambda r: r in cut and r['reference'] == 'SAT')}"
           f", answered SAT {count(lambda r: r in cut and r['answer'] == 'SAT')}")
     for row in rows:
         if row["correct"] == "NO":

@@ -1,11 +1,11 @@
 # Experiment: correctness of satypy on very small CNF formulas.
 #
-# Every formula is decided by satypy (algorithm.solve: simplification, 2-SAT, or the bipartite MIDS graph of maximum degree 3 decided by the
+# Every formula is decided by satypy (algorithm.solve: simplification, 2-SAT, or the bipartite MDS graph of maximum degree 3 decided by the
 # colour-forced set, with branching) and by exhaustive search over all assignments, and the two answers are compared.
 # The formulas are random k-CNF formulas with few variables (utils.random_formula) and the small DIMACS files of the
 # repository (at most --max-file-variables variables).
 #
-# For the formulas that reach the MIDS stage it also reports the graph (vertices, edges, maximum degree), the size of
+# For the formulas that reach the MDS stage it also reports the graph (vertices, edges, maximum degree), the size of
 # the colour-forced independent dominating set and the number of clause vertices in it (unsat).
 #
 # Works with satypy installed or not: the repository's own code is used (networkx must be installed).
@@ -34,8 +34,8 @@ DEFAULT_FILES = ["benchmarks/simple/file.cnf", "benchmarks/simple/tautology.cnf"
                  "benchmarks/test_formulas/formula0.cnf", "benchmarks/test_formulas/formula1.cnf",
                  "benchmarks/test_formulas/formula2.cnf", "benchmarks/test_formulas/formula3.cnf",
                  "benchmarks/test_formulas/planted_unique_v6_2.cnf"]
-COLUMNS = ["name", "variables", "clauses", "expected", "answer", "correct", "stage", "mids_vertices",
-           "mids_edges", "mids_max_degree", "mids_unsatisfied", "mids_size", "seconds"]
+COLUMNS = ["name", "variables", "clauses", "expected", "answer", "correct", "stage", "mds_vertices",
+           "mds_edges", "mds_max_degree", "mds_unsatisfied", "mds_size", "seconds"]
 
 
 def run(name, formula):
@@ -56,7 +56,7 @@ def run(name, formula):
            "answer": {True: "SAT", False: "UNSAT", None: "UNKNOWN"}[satisfiability],
            "correct": {True: "yes", False: "NO", None: "unknown"}[correct], "stage": stats.get("stage", ""),
            "seconds": f"{seconds:.3f}"}
-    for key in ("mids_vertices", "mids_edges", "mids_max_degree", "mids_unsatisfied", "mids_size"):
+    for key in ("mds_vertices", "mds_edges", "mds_max_degree", "mds_unsatisfied", "mds_size"):
         if key in stats:
             row[key] = stats[key]
     return row
@@ -102,8 +102,8 @@ def main():
         row = run(name, formula)
         rows.append(row)
         print(f"{name:<44}{row['variables']:>3}{row['clauses']:>4} {row['expected']:<6} {row['answer']:<8} "
-              f"{row['correct']:<8} {row['stage']:<26}{row.get('mids_vertices', ''):>7}"
-              f"{row.get('mids_unsatisfied', ''):>7}{row.get('mids_size', ''):>8}", flush=True)
+              f"{row['correct']:<8} {row['stage']:<26}{row.get('mds_vertices', ''):>7}"
+              f"{row.get('mds_unsatisfied', ''):>7}{row.get('mds_size', ''):>8}", flush=True)
 
     with open(args.output, "w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=COLUMNS)
@@ -113,13 +113,13 @@ def main():
     def count(predicate):
         return sum(1 for row in rows if predicate(row))
 
-    cut = [row for row in rows if str(row["stage"]).startswith("mids")]
+    cut = [row for row in rows if str(row["stage"]).startswith("mds")]
     print()
     print(f"formulas: {len(rows)} (SAT {count(lambda r: r['expected'] == 'SAT')}, "
           f"UNSAT {count(lambda r: r['expected'] == 'UNSAT')})")
     print(f"correct: {count(lambda r: r['correct'] == 'yes')}, wrong: {count(lambda r: r['correct'] == 'NO')}, "
           f"unknown: {count(lambda r: r['correct'] == 'unknown')}")
-    print(f"reached the MIDS graph: {len(cut)} (correct {count(lambda r: r in cut and r['correct'] == 'yes')}, "
+    print(f"reached the MDS graph: {len(cut)} (correct {count(lambda r: r in cut and r['correct'] == 'yes')}, "
           f"wrong {count(lambda r: r in cut and r['correct'] == 'NO')}, "
           f"unknown {count(lambda r: r in cut and r['correct'] == 'unknown')})")
     for row in rows:
