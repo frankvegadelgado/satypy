@@ -84,7 +84,11 @@ def sat_solver(inputFile, verbose=False, timed=False, log=False, bruteForce=Fals
     for comment in stats.get("comments", []):
         utils.output(f"{filename}: {comment}" if comparing else comment, logger, verbose or log)
     result = utils.string_result_format(satisfiability, answer, count)
-    utils.output(f"{filename}: (SatyPy) {result}" if comparing else result, logger, verbose or log)
+    line = f"{filename}: (SatyPy) {result}" if comparing else result
+    if log or verbose:
+        utils.println(line, logger)
+    if log or not verbose:
+        print(line)
 
     if satisfiability is True and answer is not None and not utils.satisfies(formula, answer):
         utils.output("c ERROR: the SatyPy assignment does not satisfy the formula", logger, verbose or log)

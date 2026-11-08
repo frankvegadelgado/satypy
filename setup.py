@@ -7,7 +7,7 @@ VERSION = "0.0.5"
 NAME = "satypy"
 
 INSTALL_REQUIRES = [
-    "furones>=0.3.9",
+    "networkx[default]>=3.4.2",
     "python-sat>=1.9.dev5",
 ]
 
@@ -39,7 +39,7 @@ setuptools.setup(
     python_requires=">=3.12",
     # Requirements
     install_requires=INSTALL_REQUIRES,
-    packages=["satypy"],
+    packages=["satypy", "satypy.siriaisa"],
     long_description=Path("README.md").read_text(),
     long_description_content_type="text/markdown",
     entry_points={
