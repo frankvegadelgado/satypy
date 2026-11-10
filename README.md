@@ -123,7 +123,7 @@ SatyPy prints its answer in the DIMACS output format.
 
 - **Comment lines:** before the answer, SatyPy prints DIMACS comment lines (`c ...`) that report what the MIDS stage
   found and, when the formula is decided, a line `c decided by: ...` naming the stage that decided it (empty clause,
-  simplification, 2-SAT, MIDS graph, branching, or MIDS graph under the assumption).
+  simplification, XOR constraints, 2-SAT, MIDS graph, branching, or MIDS graph under the assumption).
 
 - **Undecided:** `s UNKNOWN`, preceded by the comment lines. It is printed when the assignment of a set that dominates every
   vertex does not satisfy the formula, or, only with `ASSUME_SEARCH_COMPLETE = False`, when the search leaves vertices
@@ -263,13 +263,21 @@ Variable IDs may be any positive integers (not necessarily `1..n`, contiguous, o
 1. **Empty clause**: a formula containing the empty clause (a lone `0` in DIMACS) is unsatisfiable.
 2. **Simplification** (`reduction.reduce_sat_to_simplified_sat`): unit propagation and pure literals. A conflict proves the
    formula unsatisfiable.
-3. **2-SAT**: if every remaining clause has at most two literals, the formula is decided exactly by the
+3. **XOR constraints** (`affine.implied_clauses`, on the formula given to `solve` only, when a clause of the residual
+   formula has more than two literals): `2^(k-1)` clauses over the same `k` variables (`2 ≤ k ≤ 5`) whose falsifying
+   assignments all have the same parity are the equation `x_1 + … + x_k = b` (mod 2), wherever they occur in the
+   formula. The equations form a linear system over GF(2), which is eliminated with a fixed bound on the work
+   (`affine.GAUSS_WORK`; the stage is skipped when the bound is passed). An inconsistent system proves the formula
+   unsatisfiable. Otherwise the equations of at most three variables that follow from the system (a variable fixed, two
+   variables equal or opposite, the parity of three) are added as clauses, which the formula implies, and unit
+   propagation runs again. A formula without XOR constraints is not changed.
+4. **2-SAT**: if every remaining clause has at most two literals, the formula is decided exactly by the
    strongly-connected-components algorithm (`algorithm._solve_two_sat`).
-4. **Reduction to MIDS** (`reduction.reduce_cnf_to_mids`): the residual formula is used as it is. For each variable `v`
+5. **Reduction to MIDS** (`reduction.reduce_cnf_to_mids`): the residual formula is used as it is. For each variable `v`
    there are the vertices `(v)` and `(¬v)`, joined by an *independence edge*, and each clause `i` is a vertex adjacent to
    the vertices of its literals. There is no other edge. With `N` the number of variables, the graph has `2N` literal
    vertices and one vertex per clause.
-5. **MIDS search with forbidden vertices** (`siriaisa.algorithm.find_independent_dominating_set` with the clause vertices as
+6. **MIDS search with forbidden vertices** (`siriaisa.algorithm.find_independent_dominating_set` with the clause vertices as
    `forbidden`, implemented by `siriaisa.forbidden_search`): a weighted local search over independent sets without clause
    vertices. It starts from a random maximal independent set of the literal vertices (one literal per variable) and
    minimises the weight of the undominated vertices. A step picks a random undominated vertex and inserts the vertex of its
@@ -281,11 +289,11 @@ Variable IDs may be any positive integers (not necessarily `1..n`, contiguous, o
    - if it leaves no vertex undominated, `reduction.decode_mids` reads the literals of its vertices; the completed
      assignment is verified against the input (`s SATISFIABLE`), and if it does not satisfy the formula the answer is
      `s UNKNOWN`;
-   - otherwise step 6 runs.
-6. **Branching on a clause falsified by the set found by the search** (`algorithm._branch`, up to depth
+   - otherwise step 7 runs.
+7. **Branching on a clause falsified by the set found by the search** (`algorithm._branch`, up to depth
    `d = max(2, ⌊log₃(m + n)⌋)`, `algorithm.default_branch_depth`, with `m` clauses and `n` variables in the input): the
    literals of the set, completed with False, either satisfy the formula (`s SATISFIABLE`) or falsify some clauses.
-   SatyPy takes a shortest falsified clause `C` and decides every formula `φ ∧ ℓ`, `ℓ ∈ C`, with steps 2–6 and one level
+   SatyPy takes a shortest falsified clause `C` and decides every formula `φ ∧ ℓ`, `ℓ ∈ C`, with steps 2 and 4–7 and one level
    less: the formula implies `C`, so it is satisfiable exactly when some branch is.
    - some branch satisfiable: `s SATISFIABLE`, with the checked assignment of that branch;
    - every branch unsatisfiable: `s UNSATISFIABLE`;
@@ -293,7 +301,7 @@ Variable IDs may be any positive integers (not necessarily `1..n`, contiguous, o
      otherwise.
 
 `s SATISFIABLE` is printed only after the assignment has been checked to be consistent and to contain a literal of
-every clause of the input (a final certification gate in `algorithm.solve`). `s UNSATISFIABLE` comes from steps 1–3, from
+every clause of the input (a final certification gate in `algorithm.solve`). `s UNSATISFIABLE` comes from steps 1–4, from
 the branching, or from the assumption at depth 0. `algorithm.solve(formula, branch_depth=0)` gives the answer without
 branching. Use `-l` to see the stages of the formula in `app.log`; the answer is also printed on the console.
 
@@ -312,8 +320,13 @@ Write `N` for the number of variables of the residual formula and `G` for its MI
   literal per variable, and every clause vertex is adjacent to a vertex of `S`, a true literal of that clause. Conversely
   an assignment gives such a set. So `G` has an independent dominating set without clause vertices exactly when the
   formula is satisfiable, and its size is then `N`.
+- *The XOR constraints.* `2^(k-1)` clauses over `k` variables whose falsifying assignments all have the same parity
+  forbid exactly the assignments of that parity, so they are the equation `x_1 + … + x_k = b` (mod 2). If the
+  linear system of the equations of a formula is inconsistent, the formula is unsatisfiable; every equation that
+  follows from the system holds in every model, so the clauses of such an equation are implied by the formula and
+  adding them changes neither its models nor its satisfiability.
 - *The answers.* Every `SATISFIABLE` answer carries a checked assignment. `UNSATISFIABLE` comes from the exact stages
-  1–3, from branching when every branch is unsatisfiable, or, at depth 0, from the assumption below.
+  1–4, from branching when every branch is unsatisfiable, or, at depth 0, from the assumption below.
 - *Branching.* Splitting on a clause is exact, and branching to depth `d` runs the MIDS stage at most
   `1 + w + … + w^d` times (`w` the largest clause width). With `d = max(2, ⌊log₃(m + n)⌋)` and `w = 3` that is
   `(3^(d+1) − 1)/2 ≤ max(13, 3(m + n)/2)` runs.

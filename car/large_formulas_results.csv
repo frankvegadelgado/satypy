@@ -1,37 +1,37 @@
 name,variables,clauses,ratio,reference,answer,correct,stage,mids_vertices,mids_edges,mids_max_degree,mids_unsatisfied,mids_size,satypy_seconds,reference_seconds
-random-v100-r3-k3-0,100,300,3,SAT,SAT,yes,mids,493,984,11,0,99,0.014,0.014
-random-v100-r3-k3-1,100,300,3,SAT,SAT,yes,mids,500,1000,12,0,100,0.009,0.000
-random-v100-r3-k3-2,100,300,3,SAT,SAT,yes,mids,495,990,13,0,99,0.010,0.000
-random-v100-r4-k3-0,100,400,4,SAT,SAT,yes,mids,594,1287,15,0,99,0.016,0.000
-random-v100-r4-k3-1,100,400,4,SAT,SAT,yes,mids,588,1269,17,0,99,0.021,0.000
-random-v100-r4-k3-2,100,400,4,SAT,SAT,yes,mids,600,1300,17,0,100,0.690,0.001
-random-v100-r4.27-k3-0,100,427,4.27,SAT,SAT,yes,mids,627,1381,17,0,100,0.036,0.000
-random-v100-r4.27-k3-1,100,427,4.27,UNSAT,UNSAT,yes,mids (branching),627,1381,14,1,100,11.584,0.002
-random-v100-r4.27-k3-2,100,427,4.27,SAT,SAT,yes,mids,622,1371,15,0,99,0.018,0.014
-random-v100-r4.5-k3-0,100,450,4.5,UNSAT,UNSAT,yes,mids (branching),650,1450,15,3,100,12.090,0.000
-random-v100-r4.5-k3-1,100,450,4.5,UNSAT,UNSAT,yes,mids (branching),650,1450,16,2,100,14.465,0.002
-random-v100-r4.5-k3-2,100,450,4.5,UNSAT,UNSAT,yes,mids (branching),643,1434,15,1,99,12.277,0.000
-random-v200-r3-k3-0,200,600,3,SAT,SAT,yes,mids,966,1923,12,0,195,0.013,0.000
-random-v200-r3-k3-1,200,600,3,SAT,SAT,yes,mids,970,1935,13,0,195,0.014,0.003
-random-v200-r3-k3-2,200,600,3,SAT,SAT,yes,mids,987,1971,12,0,198,0.012,0.000
-random-v200-r4-k3-0,200,800,4,SAT,SAT,yes,mids,1165,2515,16,0,196,0.128,0.000
-random-v200-r4-k3-1,200,800,4,SAT,SAT,yes,mids,1200,2600,16,0,200,0.036,0.046
-random-v200-r4-k3-2,200,800,4,UNSAT,UNSAT,yes,mids (branching),1194,2587,18,1,199,47.527,0.230
-random-v200-r4.27-k3-0,200,854,4.27,UNSAT,UNSAT,yes,mids (branching),1245,2740,15,2,199,38.859,0.171
-random-v200-r4.27-k3-1,200,854,4.27,UNSAT,UNSAT,yes,mids (branching),1254,2762,17,1,200,43.259,0.229
-random-v200-r4.27-k3-2,200,854,4.27,SAT,SAT,yes,mids,1254,2762,17,0,200,0.225,0.095
-random-v200-r4.5-k3-0,200,900,4.5,UNSAT,UNSAT,yes,mids (branching),1295,2890,16,3,199,38.215,0.061
-random-v200-r4.5-k3-1,200,900,4.5,UNSAT,UNSAT,yes,mids (branching),1292,2881,16,3,199,35.250,0.048
-random-v200-r4.5-k3-2,200,900,4.5,UNSAT,UNSAT,yes,mids (branching),1293,2884,19,2,199,36.668,0.048
-random-v400-r3-k3-0,400,1200,3,SAT,SAT,yes,mids,1912,3796,13,0,388,0.038,0.000
-random-v400-r3-k3-1,400,1200,3,SAT,SAT,yes,mids,1979,3957,12,0,396,0.032,0.000
-random-v400-r3-k3-2,400,1200,3,SAT,SAT,yes,mids,1907,3786,14,0,387,0.049,0.000
-random-v400-r4-k3-0,400,1600,4,SAT,SAT,yes,mids,2363,5114,16,0,395,0.057,0.000
-random-v400-r4-k3-1,400,1600,4,SAT,SAT,yes,mids,2390,5175,16,0,399,0.132,1.263
-random-v400-r4-k3-2,400,1600,4,SAT,SAT,yes,mids,2394,5187,16,0,399,0.256,1.542
-random-v400-r4.27-k3-0,400,1708,4.27,unknown,UNSAT,unknown,mids (branching),2470,5430,17,2,396,35.286,18.497
-random-v400-r4.27-k3-1,400,1708,4.27,unknown,SAT,yes,mids,2508,5524,17,0,400,2.219,18.498
-random-v400-r4.27-k3-2,400,1708,4.27,unknown,SAT,yes,mids,2502,5511,18,0,399,2.788,18.448
-random-v400-r4.5-k3-0,400,1800,4.5,unknown,UNSAT,unknown,mids (branching),2589,5772,16,3,399,76.298,18.752
-random-v400-r4.5-k3-1,400,1800,4.5,unknown,UNSAT,unknown,mids (branching),2596,5793,18,5,399,68.848,18.829
-random-v400-r4.5-k3-2,400,1800,4.5,unknown,UNSAT,unknown,mids (branching),2600,5800,15,6,400,64.675,18.636
+random-v100-r3-k3-0,100,300,3,SAT,SAT,yes,mids,493,984,11,0,99,0.020,0.000
+random-v100-r3-k3-1,100,300,3,SAT,SAT,yes,mids,500,1000,12,0,100,0.012,0.000
+random-v100-r3-k3-2,100,300,3,SAT,SAT,yes,mids,495,990,13,0,99,0.000,0.000
+random-v100-r4-k3-0,100,400,4,SAT,SAT,yes,mids,594,1287,15,0,99,0.018,0.000
+random-v100-r4-k3-1,100,400,4,SAT,SAT,yes,mids,588,1269,17,0,99,0.017,0.000
+random-v100-r4-k3-2,100,400,4,SAT,SAT,yes,mids,600,1300,17,0,100,0.693,0.001
+random-v100-r4.27-k3-0,100,427,4.27,SAT,SAT,yes,mids,627,1381,17,0,100,0.035,0.000
+random-v100-r4.27-k3-1,100,427,4.27,UNSAT,UNSAT,yes,mids (branching),627,1381,14,1,100,11.304,0.002
+random-v100-r4.27-k3-2,100,427,4.27,SAT,SAT,yes,mids,622,1371,15,0,99,0.016,0.000
+random-v100-r4.5-k3-0,100,450,4.5,UNSAT,UNSAT,yes,mids (branching),650,1450,15,3,100,11.866,0.000
+random-v100-r4.5-k3-1,100,450,4.5,UNSAT,UNSAT,yes,mids (branching),650,1450,16,2,100,14.158,0.000
+random-v100-r4.5-k3-2,100,450,4.5,UNSAT,UNSAT,yes,mids (branching),643,1434,15,1,99,11.931,0.000
+random-v200-r3-k3-0,200,600,3,SAT,SAT,yes,mids,966,1923,12,0,195,0.000,0.000
+random-v200-r3-k3-1,200,600,3,SAT,SAT,yes,mids,970,1935,13,0,195,0.025,0.000
+random-v200-r3-k3-2,200,600,3,SAT,SAT,yes,mids,987,1971,12,0,198,0.013,0.001
+random-v200-r4-k3-0,200,800,4,SAT,SAT,yes,mids,1165,2515,16,0,196,0.097,0.001
+random-v200-r4-k3-1,200,800,4,SAT,SAT,yes,mids,1200,2600,16,0,200,0.008,0.038
+random-v200-r4-k3-2,200,800,4,UNSAT,UNSAT,yes,mids (branching),1194,2587,18,1,199,45.336,0.242
+random-v200-r4.27-k3-0,200,854,4.27,UNSAT,UNSAT,yes,mids (branching),1245,2740,15,2,199,37.134,0.141
+random-v200-r4.27-k3-1,200,854,4.27,UNSAT,UNSAT,yes,mids (branching),1254,2762,17,1,200,41.414,0.199
+random-v200-r4.27-k3-2,200,854,4.27,SAT,SAT,yes,mids,1254,2762,17,0,200,0.189,0.068
+random-v200-r4.5-k3-0,200,900,4.5,UNSAT,UNSAT,yes,mids (branching),1295,2890,16,3,199,36.352,0.061
+random-v200-r4.5-k3-1,200,900,4.5,UNSAT,UNSAT,yes,mids (branching),1292,2881,16,3,199,33.263,0.044
+random-v200-r4.5-k3-2,200,900,4.5,UNSAT,UNSAT,yes,mids (branching),1293,2884,19,2,199,37.602,0.035
+random-v400-r3-k3-0,400,1200,3,SAT,SAT,yes,mids,1912,3796,13,0,388,0.036,0.000
+random-v400-r3-k3-1,400,1200,3,SAT,SAT,yes,mids,1979,3957,12,0,396,0.035,0.000
+random-v400-r3-k3-2,400,1200,3,SAT,SAT,yes,mids,1907,3786,14,0,387,0.048,0.000
+random-v400-r4-k3-0,400,1600,4,SAT,SAT,yes,mids,2363,5114,16,0,395,0.054,0.010
+random-v400-r4-k3-1,400,1600,4,SAT,SAT,yes,mids,2390,5175,16,0,399,0.171,0.611
+random-v400-r4-k3-2,400,1600,4,SAT,SAT,yes,mids,2394,5187,16,0,399,0.246,2.840
+random-v400-r4.27-k3-0,400,1708,4.27,unknown,UNSAT,unknown,mids (branching),2470,5430,17,2,396,36.302,19.117
+random-v400-r4.27-k3-1,400,1708,4.27,unknown,SAT,yes,mids,2508,5524,17,0,400,2.182,18.751
+random-v400-r4.27-k3-2,400,1708,4.27,unknown,SAT,yes,mids,2502,5511,18,0,399,2.789,17.943
+random-v400-r4.5-k3-0,400,1800,4.5,unknown,UNSAT,unknown,mids (branching),2589,5772,16,3,399,70.722,18.061
+random-v400-r4.5-k3-1,400,1800,4.5,unknown,UNSAT,unknown,mids (branching),2596,5793,18,5,399,64.776,17.877
+random-v400-r4.5-k3-2,400,1800,4.5,unknown,UNSAT,unknown,mids (branching),2600,5800,15,6,400,60.408,17.812

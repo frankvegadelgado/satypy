@@ -4,7 +4,7 @@ import networkx as nx
 
 from .siriaisa.algorithm import find_independent_dominating_set
 
-from . import reduction, utils
+from . import affine, reduction, utils
 
 
 #: Assumption of the last stage: when the search for an independent dominating set without clause vertices (the
@@ -124,7 +124,7 @@ def solve(formula, logger=None, stats=None, branch_depth=None):
     width = max(3, max((len(clause) for clause in formula), default=3))
     runs = sum(width ** level for level in range(branch_depth + 1))   # searches of the whole branching, at most
     effort = max(1 + 2 * branch_depth, -(-runs // 10))
-    satisfiability, answer = _solve(formula, logger, stats, branch_depth, effort)
+    satisfiability, answer = _solve(formula, logger, stats, branch_depth, effort, top=True)
     if satisfiability is True:
         if answer is None:
             return None, None
@@ -136,13 +136,17 @@ def solve(formula, logger=None, stats=None, branch_depth=None):
     return satisfiability, answer
 
 
-def _solve(formula, logger, stats, branch_depth, effort=1):
+def _solve(formula, logger, stats, branch_depth, effort=1, top=False):
     """Decide a CNF formula given as a list of clauses (lists of non-zero integers; variable IDs
     need not be 1..n, contiguous or sorted).
 
     1. reduce_sat_to_simplified_sat: unit propagation and pure literals (UNSAT on conflicts);
-    2. residual 2-SAT: solved exactly by _solve_two_sat;
-    3. otherwise reduce_cnf_to_mids (the residual formula, directly: one vertex per literal, one vertex per clause;
+    2. at the top level, if a clause is wider than 2: the XOR constraints written by the clauses are eliminated over
+       GF(2) (affine.implied_clauses, work bounded by a constant); an inconsistent system proves the formula
+       unsatisfiable, and the equations of at most three variables that follow from the system (variables fixed,
+       equal or opposite, parities of three) are added as clauses, which the formula implies, and propagated;
+    3. residual 2-SAT: solved exactly by _solve_two_sat;
+    4. otherwise reduce_cnf_to_mids (the residual formula, directly: one vertex per literal, one vertex per clause;
        the two literals of a variable are joined by the independence edge and each clause is adjacent to its
        literals). The weighted local search of Siriaisa (find_independent_dominating_set with the clause vertices as
        its forbidden vertices) looks for an independent set without clause vertices that dominates every vertex: its
@@ -183,6 +187,7 @@ def _solve(formula, logger, stats, branch_depth, effort=1):
     max_variable = variables[-1]
     log(f"Formula: {len(variables)} variables, {len(formula)} clauses")
 
+    xor = {}
     stats.update(variables=len(variables), clauses=len(formula), stage="simplification")
     clauses, solution = reduction.reduce_sat_to_simplified_sat(formula)
     if clauses is None:
@@ -196,6 +201,35 @@ def _solve(formula, logger, stats, branch_depth, effort=1):
         if ok:
             stats["comments"].append("c decided by: simplification (unit propagation and pure literals)")
         return (True, assignment) if ok else (None, None)
+
+    if top and any(len(clause) > 2 for clause in clauses):
+        implied = affine.implied_clauses(clauses, xor)
+        if implied is None:
+            log("The XOR constraints of the formula are inconsistent")
+            stats["stage"] = "xor"
+            stats["comments"].append("c decided by: the XOR constraints of the formula (Gaussian elimination over "
+                                     "GF(2) shows them inconsistent)")
+            return False, None
+        stats.update(xor_constraints=xor["xors"], xor_rank=xor["rank"], xor_implied=len(implied))
+        if implied:
+            log(f"XOR constraints: {xor['xors']} found (rank {xor['rank']}), {len(implied)} implied clauses added")
+            again, committed = reduction.reduce_sat_to_simplified_sat(clauses + implied)
+            if again is None:
+                log("Simplification found a conflict")
+                stats["stage"] = "xor"
+                stats["comments"].append("c decided by: the XOR constraints of the formula (Gaussian elimination "
+                                         "over GF(2) and unit propagation found a conflict)")
+                return False, None
+            clauses, solution = again, solution | committed
+            log(f"Simplification: {len(clauses)} clauses left, {len(solution)} literals committed")
+            stats.update(residual_clauses=len(clauses), committed=len(solution))
+            if not clauses:
+                ok, assignment = check(formula, solution, set())
+                if ok:
+                    stats["stage"] = "xor"
+                    stats["comments"].append("c decided by: the XOR constraints of the formula (Gaussian "
+                                             "elimination over GF(2) and unit propagation)")
+                return (True, assignment) if ok else (None, None)
 
     if all(len(clause) <= 2 for clause in clauses):
         log("Residual formula is 2-SAT")
